@@ -1,0 +1,1160 @@
+<template>
+  <view class="tournament-detail">
+    <!-- 导航栏 -->
+    <uni-nav-bar
+      title="赛事详情"
+      left-icon="arrow-left"
+      @click-left="goBack"
+      fixed
+    />
+
+    <!-- 选项卡导航 -->
+    <view class="tabs-container">
+      <view class="tabs-header">
+        <view 
+          v-for="tab in tabs" 
+          :key="tab.id"
+          class="tab-item"
+          :class="{ active: activeTab === tab.id }"
+          @tap="switchTab(tab.id)"
+        >
+          <text>{{ tab.title }}</text>
+        </view>
+      </view>
+
+      <!-- 详情选项卡 -->
+      <view v-show="activeTab === 'details'" class="tab-content">
+        <scroll-view class="content-scroll" scroll-y>
+          <!-- 基本信息卡片 -->
+          <view class="info-card">
+            <view class="card-header">
+              <text class="tournament-title">{{ tournament.title }}</text>
+              <view :class="['status-tag', getStatusClass(tournament.status)]">
+                <text>{{ getStatusText(tournament.status) }}</text>
+              </view>
+            </view>
+
+            <view class="info-list">
+              <view class="info-item">
+                <text class="icon">⏰</text>
+                <text class="label">比赛时间：</text>
+                <text class="value">{{ getDateRange(tournament.startTime, tournament.endTime) }}</text>
+              </view>
+              <view class="info-item">
+                <text class="icon">📍</text>
+                <text class="label">比赛地点：</text>
+                <text class="value">{{ tournament.location }}</text>
+              </view>
+              <view class="info-item">
+                <text class="icon">👥</text>
+                <text class="label">参与人数：</text>
+                <text class="value">{{ tournament.currentPlayers }}/{{ tournament.maxPlayers }}</text>
+              </view>
+              <view class="info-item">
+                <text class="icon">🏅</text>
+                <text class="label">比赛类型：</text>
+                <text class="value">{{ getTypeText(tournament.type) }}</text>
+              </view>
+              <view class="info-item">
+                <text class="icon">📊</text>
+                <text class="label">积分上限：</text>
+                <text class="value">{{ tournament.level === '0' ? '无限制' : tournament.level }}</text>
+              </view>
+              <view class="info-item">
+                <text class="icon">💰</text>
+                <text class="label">报名费用：</text>
+                <text class="value">{{ tournament.entryFee }}元</text>
+              </view>
+            </view>
+          </view>
+
+          <!-- 赛事说明卡片 -->
+          <view class="description-card">
+            <text class="section-title">赛事说明</text>
+            <view class="description-content">
+              <text>{{ tournament.description }}</text>
+            </view>
+          </view>
+
+          <!-- 操作按钮区域 -->
+          <view class="action-space">
+            <!-- 空白的间距区域 -->
+          </view>
+        </scroll-view>
+
+        <!-- 操作按钮栏（固定在底部） -->
+        <view class="action-bar">
+          <!-- 状态操作按钮 -->
+          <template v-if="hasPermission('tournament:edit')">
+            <button 
+              v-if="tournament.status === 'DRAFT'"
+              type="primary" 
+              class="action-btn"
+              @tap="updateStatus('REGISTERING')"
+            >
+              开始报名
+            </button>
+            <button 
+              v-if="tournament.status === 'REGISTERING'"
+              type="primary" 
+              class="action-btn"
+              @tap="handleStartTournament"
+            >
+              开始比赛
+            </button>
+            <button 
+              v-if="tournament.status === 'ONGOING'"
+              type="warn" 
+              class="action-btn"
+              @tap="updateStatus('FINISHED')"
+            >
+              结束比赛
+            </button>
+          </template>
+
+          <!-- 编辑按钮 -->
+          <template v-if="hasPermission('tournament:edit') && tournament.status === 'DRAFT'">
+            <button 
+              type="default" 
+              class="action-btn"
+              @tap="editTournament"
+            >
+              编辑赛事
+            </button>
+          </template>
+
+          <!-- 删除按钮 -->
+          <template v-if="hasPermission('tournament:delete') && tournament.status === 'DRAFT'">
+            <button 
+              type="warn" 
+              class="action-btn delete-btn"
+              @tap="deleteTournament"
+            >
+              删除赛事
+            </button>
+          </template>
+
+          <!-- 报名按钮 -->
+          <button 
+            v-if="tournament.status === 'REGISTERING' && !isRegistered"
+            type="primary" 
+            class="action-btn"
+            @tap="register"
+          >
+            立即报名
+          </button>
+
+          <!-- 取消报名按钮 -->
+          <button 
+            v-if="tournament.status === 'REGISTERING' && isRegistered"
+            type="warn" 
+            class="action-btn"
+            @tap="cancelRegistration"
+          >
+            取消报名
+          </button>
+        </view>
+      </view>
+
+      <!-- 参赛名单选项卡 -->
+      <view v-show="activeTab === 'registrations'" class="tab-content">
+        <scroll-view class="content-scroll" scroll-y>
+          <view class="registrations-card">
+            <view v-if="sortedRegistrations.length > 0" class="registration-list">
+              <view 
+                v-for="(registration, index) in sortedRegistrations" 
+                :key="registration.id" 
+                class="registration-item"
+              >
+                <view class="user-info" @tap="showUserDetail(registration.user)">
+                  <view class="index-circle">{{ index + 1 }}</view>
+                  <text class="name">{{ registration.user?.nickname }}</text>
+                </view>
+                <view class="tags-container">
+                  <view class="points-tag">
+                    <text>{{ registration.user?.points || 0 }}分</text>
+                  </view>
+                  <view :class="['status-tag', getRegistrationStatusClass(registration.status)]">
+                    <text>{{ getRegistrationStatusText(registration.status) }}</text>
+                  </view>
+                </view>
+              </view>
+            </view>
+            <view v-else class="empty-state">
+              <text class="empty-icon">📋</text>
+              <text class="empty-text">暂无报名信息</text>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+
+      <!-- 赛程选项卡 -->
+      <view v-show="activeTab === 'schedule'" class="tab-content">
+        <scroll-view class="content-scroll" scroll-y>
+          <view class="schedule-card">
+            <!-- 这里可以放置 TournamentSchedule 组件 -->
+            <view class="schedule-placeholder">
+              <text class="placeholder-text">赛程安排将在这里显示</text>
+              <text class="placeholder-subtext">小组赛和淘汰赛的详细赛程</text>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+    </view>
+
+    <!-- 用户详情弹窗 -->
+    <uni-popup ref="userDetailPopup" type="bottom" :mask-click="true">
+      <view class="detail-popup" v-if="selectedUser">
+        <view class="popup-header">
+          <text class="header-title">用户详情</text>
+          <view class="close-btn" @tap="closeUserDetailPopup">
+            <text>×</text>
+          </view>
+        </view>
+        <scroll-view class="user-info-scroll" scroll-y>
+          <view class="info-row">
+            <text class="label">ID</text>
+            <text class="value">{{ selectedUser.id }}</text>
+          </view>
+          <view class="info-row">
+            <text class="label">昵称</text>
+            <text class="value">{{ selectedUser.nickname }}</text>
+          </view>
+          <view class="info-row">
+            <text class="label">握拍方式</text>
+            <text class="value">{{ selectedUser.gripStyle || '未设置' }}</text>
+          </view>
+          <view class="info-row">
+            <text class="label">球拍配置</text>
+            <text class="value">{{ selectedUser.racketConfig || '未设置' }}</text>
+          </view>
+          <view class="info-row">
+            <text class="label">当前积分</text>
+            <text class="value">{{ selectedUser.points || 0 }}</text>
+          </view>
+          <view class="info-row">
+            <text class="label">水平级别</text>
+            <text class="value">{{ selectedUser.level || 'BEGINNER' }}</text>
+          </view>
+          <view class="info-row">
+            <text class="label">参赛场次</text>
+            <text class="value">{{ selectedUser.matchCount || 0 }}</text>
+          </view>
+          <view class="info-row">
+            <text class="label">全网排名</text>
+            <text class="value">{{ selectedUser.totalRank || '-' }}</text>
+          </view>
+          <view class="info-row">
+            <text class="label">胜率</text>
+            <text class="value">{{ selectedUser.winRate ? selectedUser.winRate + '%' : '-' }}</text>
+          </view>
+          <view class="info-row">
+            <text class="label">历史最高积分</text>
+            <text class="value">{{ selectedUser.highestPoints || '-' }}</text>
+          </view>
+          <view class="info-row">
+            <text class="label">年度平均积分</text>
+            <text class="value">{{ selectedUser.yearlyAveragePoints || '-' }}</text>
+          </view>
+        </scroll-view>
+      </view>
+    </uni-popup>
+
+    <!-- 报名确认弹窗 -->
+    <uni-popup ref="registerPopup" type="dialog">
+      <view class="register-dialog">
+        <text class="dialog-title">报名确认</text>
+        <view class="dialog-content">
+          <text class="dialog-message">
+            {{ tournament.currentPlayers >= tournament.maxPlayers 
+              ? '当前报名人数已满，您将进入候补名单，是否继续？' 
+              : '确认报名参加该赛事吗？' }}
+          </text>
+          <text v-if="tournament.entryFee > 0" class="fee-info">
+            需支付报名费：{{ tournament.entryFee }}元
+          </text>
+        </view>
+        <view class="dialog-actions">
+          <button class="dialog-btn cancel-btn" @tap="cancelRegister">取消</button>
+          <button class="dialog-btn confirm-btn" @tap="confirmRegister">确认</button>
+        </view>
+      </view>
+    </uni-popup>
+  </view>
+</template>
+
+<script>
+import { ref, onMounted, computed } from 'vue'
+import { 
+  getTournamentById, 
+  updateTournamentStatus, 
+  deleteTournament as deleteTournamentApi, 
+  startTournament, 
+  getGroupingStrategy 
+} from '@/api/tournament'
+import { getRegistrations, register as registerApi, cancelRegistration as cancelRegistrationApi } from '@/api/registration'
+import { hasPermission } from '@/utils/permission'
+import { getDateRange } from '@/utils/date'
+import uniPopup from '@dcloudio/uni-popup'
+
+export default {
+  setup() {
+    const tournament = ref({})
+    const registrations = ref([])
+    const isRegistered = ref(false)
+    const myRegistration = ref(null)
+    const selectedUser = ref(null)
+    const activeTab = ref('details')
+    const groupingStrategy = ref(null)
+    const userDetailPopup = ref(null)
+    const registerPopup = ref(null)
+    
+    // 选项卡配置
+    const tabs = [
+      { id: 'details', title: '详情' },
+      { id: 'registrations', title: '参赛名单' },
+      { id: 'schedule', title: '赛程' }
+    ]
+
+    // 获取当前用户ID
+    const getCurrentUserId = () => {
+      return uni.getStorageSync('userId') || null
+    }
+
+    // 获取赛事详情
+    const loadTournament = async () => {
+      try {
+        // 从页面参数获取赛事ID
+        const pages = getCurrentPages()
+        const currentPage = pages[pages.length - 1]
+        const tournamentId = currentPage.options.id || currentPage.options.tournamentId
+        
+        if (!tournamentId) {
+          uni.showToast({
+            title: '赛事ID不存在',
+            icon: 'none'
+          })
+          goBack()
+          return
+        }
+
+        const res = await getTournamentById(tournamentId)
+        tournament.value = res.data || {}
+        await loadRegistrations()
+        
+        if (tournament.value?.status === 'REGISTERING') {
+          loadGroupingStrategy()
+        }
+      } catch (error) {
+        console.error('获取赛事信息失败:', error)
+        uni.showToast({
+          title: '获取赛事信息失败',
+          icon: 'none'
+        })
+        goBack()
+      }
+    }
+
+    // 获取报名列表
+    const loadRegistrations = async () => {
+      try {
+        const tournamentId = tournament.value.id
+        if (!tournamentId) return
+        
+        const res = await getRegistrations(tournamentId)
+        registrations.value = res.data || []
+        
+        const userId = getCurrentUserId()
+        if (userId) {
+          myRegistration.value = registrations.value.find(r => r.userId === userId)
+          isRegistered.value = !!myRegistration.value
+        }
+      } catch (error) {
+        console.error('获取参赛名单失败:', error)
+        uni.showToast({
+          title: '获取参赛名单失败',
+          icon: 'none'
+        })
+      }
+    }
+
+    // 获取分组策略
+    const loadGroupingStrategy = async () => {
+      try {
+        const res = await getGroupingStrategy(tournament.value.id)
+        groupingStrategy.value = res.data
+      } catch (error) {
+        console.error('获取分组策略失败:', error)
+      }
+    }
+
+    // 返回上一页
+    const goBack = () => {
+      uni.navigateBack()
+    }
+
+    // 切换选项卡
+    const switchTab = (tabId) => {
+      activeTab.value = tabId
+    }
+
+    // 更新赛事状态
+    const updateStatus = async (status) => {
+      try {
+        const statusTextMap = {
+          'REGISTERING': '开始报名',
+          'ONGOING': '开始比赛',
+          'FINISHED': '结束比赛'
+        }
+        
+        uni.showModal({
+          title: '确认操作',
+          content: `确定要${statusTextMap[status]}吗？`,
+          success: async (res) => {
+            if (res.confirm) {
+              await updateTournamentStatus(tournament.value.id, status)
+              uni.showToast({
+                title: '状态更新成功',
+                icon: 'success'
+              })
+              await loadTournament()
+            }
+          }
+        })
+      } catch (error) {
+        uni.showToast({
+          title: '状态更新失败',
+          icon: 'none'
+        })
+      }
+    }
+
+    // 开始比赛
+    const handleStartTournament = async () => {
+      try {
+        uni.showModal({
+          title: '确认开始比赛',
+          content: '确定要开始比赛吗？开始后将自动生成对阵表。',
+          success: async (res) => {
+            if (res.confirm) {
+              await startTournament(tournament.value.id)
+              uni.showToast({
+                title: '比赛已开始',
+                icon: 'success'
+              })
+              await loadTournament()
+            }
+          }
+        })
+      } catch (error) {
+        uni.showToast({
+          title: '开始比赛失败',
+          icon: 'none'
+        })
+      }
+    }
+
+    // 报名
+    const register = async () => {
+      if (tournament.value.entryFee > 0) {
+        registerPopup.value.open()
+      } else {
+        uni.showModal({
+          title: '报名确认',
+          content: tournament.value.currentPlayers >= tournament.value.maxPlayers
+            ? '当前报名人数已满，您将进入候补名单，是否继续？'
+            : '确认报名参加该赛事吗？',
+          success: async (res) => {
+            if (res.confirm) {
+              await confirmRegister()
+            }
+          }
+        })
+      }
+    }
+
+    // 确认报名
+    const confirmRegister = async () => {
+      try {
+        await registerApi(tournament.value.id)
+        uni.showToast({
+          title: '报名成功',
+          icon: 'success'
+        })
+        registerPopup.value.close()
+        await loadRegistrations()
+      } catch (error) {
+        uni.showToast({
+          title: '报名失败',
+          icon: 'none'
+        })
+      }
+    }
+
+    // 取消报名
+    const cancelRegister = () => {
+      registerPopup.value.close()
+    }
+
+    // 取消报名（已报名状态）
+    const cancelRegistration = async () => {
+      try {
+        uni.showModal({
+          title: '确认取消',
+          content: '确定要取消报名吗？取消后如需参加需要重新报名。',
+          success: async (res) => {
+            if (res.confirm) {
+              await cancelRegistrationApi(tournament.value.id)
+              uni.showToast({
+                title: '取消报名成功',
+                icon: 'success'
+              })
+              await loadRegistrations()
+            }
+          }
+        })
+      } catch (error) {
+        uni.showToast({
+          title: '取消报名失败',
+          icon: 'none'
+        })
+      }
+    }
+
+    // 获取状态样式类
+    const getStatusClass = (status) => {
+      const classMap = {
+        'DRAFT': 'status-draft',
+        'REGISTERING': 'status-registering',
+        'ONGOING': 'status-ongoing',
+        'FINISHED': 'status-finished'
+      }
+      return classMap[status] || 'status-default'
+    }
+
+    // 获取状态文本
+    const getStatusText = (status) => {
+      const textMap = {
+        'DRAFT': '草稿',
+        'REGISTERING': '报名中',
+        'ONGOING': '进行中',
+        'FINISHED': '已结束'
+      }
+      return textMap[status] || status
+    }
+
+    // 获取类型文本
+    const getTypeText = (type) => {
+      const textMap = {
+        'SINGLES': '单打',
+        'DOUBLES': '双打',
+        'TEAM': '团体'
+      }
+      return textMap[type] || type
+    }
+
+    // 获取报名状态文本
+    const getRegistrationStatusText = (status) => {
+      const textMap = {
+        'PENDING': '已报名',
+        'APPROVED': '已报名',
+        'REJECTED': '已拒绝',
+        'WAITLIST': '候补中'
+      }
+      return textMap[status] || status
+    }
+
+    // 获取报名状态样式类
+    const getRegistrationStatusClass = (status) => {
+      const classMap = {
+        'PENDING': 'registration-pending',
+        'APPROVED': 'registration-approved',
+        'REJECTED': 'registration-rejected',
+        'WAITLIST': 'registration-waitlist'
+      }
+      return classMap[status] || 'registration-default'
+    }
+
+    // 编辑赛事
+    const editTournament = async () => {
+      try {
+        uni.showModal({
+          title: '确认编辑',
+          content: '确定要编辑该赛事吗？',
+          success: (res) => {
+            if (res.confirm) {
+              uni.navigateTo({
+                url: `/pages/tournament/edit?id=${tournament.value.id}`
+              })
+            }
+          }
+        })
+      } catch (error) {
+        // 用户取消操作
+      }
+    }
+
+    // 按积分降序排序的报名列表
+    const sortedRegistrations = computed(() => {
+      return [...registrations.value].sort((a, b) => {
+        return (b.user?.points || 0) - (a.user?.points || 0)
+      })
+    })
+
+    // 删除赛事
+    const deleteTournament = async () => {
+      try {
+        uni.showModal({
+          title: '确认删除',
+          content: `确定要删除赛事"${tournament.value.title}"吗？删除后无法恢复。`,
+          success: async (res) => {
+            if (res.confirm) {
+              await deleteTournamentApi(tournament.value.id)
+              uni.showToast({
+                title: '删除成功',
+                icon: 'success'
+              })
+              goBack()
+            }
+          }
+        })
+      } catch (error) {
+        uni.showToast({
+          title: '删除失败',
+          icon: 'none'
+        })
+      }
+    }
+
+    // 显示用户详情
+    const showUserDetail = (user) => {
+      selectedUser.value = user
+      userDetailPopup.value.open()
+    }
+
+    // 关闭用户详情弹窗
+    const closeUserDetailPopup = () => {
+      userDetailPopup.value.close()
+    }
+
+    onMounted(() => {
+      loadTournament()
+    })
+
+    return {
+      tournament,
+      registrations,
+      isRegistered,
+      selectedUser,
+      activeTab,
+      tabs,
+      userDetailPopup,
+      registerPopup,
+      sortedRegistrations,
+      getDateRange,
+      hasPermission,
+      goBack,
+      switchTab,
+      updateStatus,
+      handleStartTournament,
+      register,
+      confirmRegister,
+      cancelRegister,
+      cancelRegistration,
+      getStatusClass,
+      getStatusText,
+      getTypeText,
+      getRegistrationStatusText,
+      getRegistrationStatusClass,
+      editTournament,
+      deleteTournament,
+      showUserDetail,
+      closeUserDetailPopup
+    }
+  }
+}
+</script>
+
+<style scoped>
+.tournament-detail {
+  min-height: 100vh;
+  background-color: #f7f8fa;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 选项卡容器 */
+.tabs-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-top: 88rpx; /* 导航栏高度 */
+}
+
+.tabs-header {
+  display: flex;
+  background-color: #fff;
+  border-bottom: 2rpx solid #eee;
+  position: sticky;
+  top: 88rpx;
+  z-index: 10;
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 30rpx 0;
+  font-size: 30rpx;
+  color: #666;
+  position: relative;
+}
+
+.tab-item.active {
+  color: #1989fa;
+  font-weight: 500;
+}
+
+.tab-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80rpx;
+  height: 4rpx;
+  background-color: #1989fa;
+  border-radius: 2rpx;
+}
+
+.tab-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.content-scroll {
+  flex: 1;
+}
+
+/* 基本信息卡片 */
+.info-card {
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 40rpx;
+  margin: 30rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.05);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 30rpx;
+}
+
+.tournament-title {
+  font-size: 38rpx;
+  font-weight: bold;
+  color: #333;
+  flex: 1;
+  margin-right: 20rpx;
+  line-height: 1.4;
+}
+
+.status-tag {
+  padding: 8rpx 24rpx;
+  border-radius: 30rpx;
+  font-size: 26rpx;
+  font-weight: 500;
+}
+
+.status-draft {
+  background-color: #f5f5f5;
+  color: #666;
+}
+
+.status-registering {
+  background-color: #e8f3ff;
+  color: #1989fa;
+}
+
+.status-ongoing {
+  background-color: #e8f8e8;
+  color: #07c160;
+}
+
+.status-finished {
+  background-color: #fff7e6;
+  color: #ff976a;
+}
+
+.info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  font-size: 28rpx;
+}
+
+.info-item .icon {
+  font-size: 30rpx;
+  opacity: 0.7;
+}
+
+.info-item .label {
+  color: #999;
+  min-width: 160rpx;
+}
+
+.info-item .value {
+  flex: 1;
+  color: #333;
+}
+
+/* 赛事说明卡片 */
+.description-card {
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 40rpx;
+  margin: 0 30rpx 30rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.05);
+}
+
+.section-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 30rpx;
+  display: block;
+}
+
+.description-content {
+  font-size: 28rpx;
+  color: #666;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* 操作按钮栏 */
+.action-space {
+  height: 160rpx; /* 为底部操作栏预留空间 */
+}
+
+.action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: #fff;
+  padding: 30rpx;
+  padding-bottom: calc(30rpx + env(safe-area-inset-bottom));
+  box-shadow: 0 -4rpx 20rpx rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+  z-index: 100;
+}
+
+.action-btn {
+  height: 88rpx;
+  border-radius: 44rpx;
+  font-size: 32rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background-color: #1989fa;
+  color: #fff;
+}
+
+.action-btn[type="default"] {
+  background-color: #f5f5f5;
+  color: #333;
+  border: 2rpx solid #eee;
+}
+
+.action-btn[type="warn"] {
+  background-color: #ff4444;
+  color: #fff;
+}
+
+.delete-btn {
+  background-color: #ff4444;
+  color: #fff;
+}
+
+/* 参赛名单卡片 */
+.registrations-card {
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 40rpx;
+  margin: 30rpx;
+  min-height: 200rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.05);
+}
+
+.registration-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.registration-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24rpx;
+  background-color: #f8f9fa;
+  border-radius: 16rpx;
+}
+
+.registration-item .user-info {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  flex: 1;
+}
+
+.registration-item .index-circle {
+  width: 48rpx;
+  height: 48rpx;
+  background-color: #f2f3f5;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26rpx;
+  color: #666;
+  font-weight: 500;
+}
+
+.registration-item .name {
+  font-size: 30rpx;
+  font-weight: 500;
+  color: #323233;
+}
+
+.tags-container {
+  display: flex;
+  gap: 16rpx;
+  align-items: center;
+}
+
+.points-tag {
+  padding: 6rpx 16rpx;
+  background-color: #e8f3ff;
+  border-radius: 20rpx;
+  font-size: 24rpx;
+  color: #1989fa;
+}
+
+.registration-pending,
+.registration-approved {
+  background-color: #e8f8e8;
+  color: #07c160;
+}
+
+.registration-rejected {
+  background-color: #ffeaea;
+  color: #ee0a24;
+}
+
+.registration-waitlist {
+  background-color: #fff7e6;
+  color: #ff976a;
+}
+
+.registration-default {
+  background-color: #f5f5f5;
+  color: #666;
+}
+
+/* 赛程卡片 */
+.schedule-card {
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 40rpx;
+  margin: 30rpx;
+  min-height: 200rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.schedule-placeholder {
+  text-align: center;
+}
+
+.placeholder-text {
+  font-size: 32rpx;
+  color: #333;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 16rpx;
+}
+
+.placeholder-subtext {
+  font-size: 26rpx;
+  color: #999;
+  display: block;
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80rpx 0;
+}
+
+.empty-icon {
+  font-size: 120rpx;
+  margin-bottom: 30rpx;
+  opacity: 0.3;
+}
+
+.empty-text {
+  font-size: 30rpx;
+  color: #999;
+}
+
+/* 用户详情弹窗 */
+.detail-popup {
+  background: #fff;
+  border-radius: 40rpx 40rpx 0 0;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 40rpx;
+  border-bottom: 2rpx solid #eee;
+}
+
+.header-title {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.close-btn {
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 50%;
+  background: #f5f5f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40rpx;
+  color: #999;
+  cursor: pointer;
+}
+
+.user-info-scroll {
+  flex: 1;
+  padding: 40rpx;
+  max-height: 60vh;
+}
+
+.info-row {
+  display: flex;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #f5f5f5;
+}
+
+.info-row .label {
+  width: 200rpx;
+  color: #666;
+  font-size: 28rpx;
+}
+
+.info-row .value {
+  flex: 1;
+  color: #333;
+  font-size: 28rpx;
+  word-break: break-all;
+}
+
+/* 报名确认弹窗 */
+.register-dialog {
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 40rpx;
+  width: 600rpx;
+  max-width: 90vw;
+}
+
+.dialog-title {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #333;
+  text-align: center;
+  margin-bottom: 30rpx;
+  display: block;
+}
+
+.dialog-content {
+  margin-bottom: 40rpx;
+}
+
+.dialog-message {
+  font-size: 30rpx;
+  color: #333;
+  line-height: 1.6;
+  display: block;
+  margin-bottom: 20rpx;
+}
+
+.fee-info {
+  font-size: 28rpx;
+  color: #ff4444;
+  display: block;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 20rpx;
+}
+
+.dialog-btn {
+  flex: 1;
+  height: 80rpx;
+  border-radius: 40rpx;
+  font-size: 30rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+}
+
+.cancel-btn {
+  background-color: #f5f5f5;
+  color: #666;
+}
+
+.confirm-btn {
+  background-color: #1989fa;
+  color: #fff;
+}
+
+/* 安全区域适配 */
+@media only screen and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3),
+       only screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3),
+       only screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) {
+  .action-bar {
+    padding-bottom: calc(30rpx + env(safe-area-inset-bottom));
+  }
+}
+</style>
