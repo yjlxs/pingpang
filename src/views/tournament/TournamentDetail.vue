@@ -1,12 +1,14 @@
 <template>
   <view class="tournament-detail">
-    <!-- 导航栏 -->
-    <uni-nav-bar
-      title="赛事详情"
-      left-icon="arrow-left"
-      @click-left="goBack"
-      fixed
-    />
+    <!-- 自定义导航栏 -->
+    <view class="custom-navbar">
+      <view class="navbar-left" @tap="goBack">
+        <text class="navbar-icon">‹</text>
+        <text class="navbar-text">返回</text>
+      </view>
+      <text class="navbar-title">赛事详情</text>
+      <view class="navbar-right"></view>
+    </view>
 
     <!-- 选项卡导航 -->
     <view class="tabs-container">
@@ -168,11 +170,11 @@
               >
                 <view class="user-info" @tap="showUserDetail(registration.user)">
                   <view class="index-circle">{{ index + 1 }}</view>
-                  <text class="name">{{ registration.user?.nickname }}</text>
+                  <text class="name">{{ registration.user && registration.user.nickname }}</text>
                 </view>
                 <view class="tags-container">
                   <view class="points-tag">
-                    <text>{{ registration.user?.points || 0 }}分</text>
+                    <text>{{ registration.user && registration.user.points || 0 }}分</text>
                   </view>
                   <view :class="['status-tag', getRegistrationStatusClass(registration.status)]">
                     <text>{{ getRegistrationStatusText(registration.status) }}</text>
@@ -203,8 +205,9 @@
     </view>
 
     <!-- 用户详情弹窗 -->
-    <uni-popup ref="userDetailPopup" type="bottom" :mask-click="true">
-      <view class="detail-popup" v-if="selectedUser">
+    <view class="detail-popup" v-if="showUserDetailPopup">
+      <view class="popup-mask" @tap="closeUserDetailPopup"></view>
+      <view class="popup-content">
         <view class="popup-header">
           <text class="header-title">用户详情</text>
           <view class="close-btn" @tap="closeUserDetailPopup">
@@ -214,57 +217,58 @@
         <scroll-view class="user-info-scroll" scroll-y>
           <view class="info-row">
             <text class="label">ID</text>
-            <text class="value">{{ selectedUser.id }}</text>
+            <text class="value">{{ selectedUser && selectedUser.id }}</text>
           </view>
           <view class="info-row">
             <text class="label">昵称</text>
-            <text class="value">{{ selectedUser.nickname }}</text>
+            <text class="value">{{ selectedUser && selectedUser.nickname }}</text>
           </view>
           <view class="info-row">
             <text class="label">握拍方式</text>
-            <text class="value">{{ selectedUser.gripStyle || '未设置' }}</text>
+            <text class="value">{{ selectedUser && selectedUser.gripStyle || '未设置' }}</text>
           </view>
           <view class="info-row">
             <text class="label">球拍配置</text>
-            <text class="value">{{ selectedUser.racketConfig || '未设置' }}</text>
+            <text class="value">{{ selectedUser && selectedUser.racketConfig || '未设置' }}</text>
           </view>
           <view class="info-row">
             <text class="label">当前积分</text>
-            <text class="value">{{ selectedUser.points || 0 }}</text>
+            <text class="value">{{ selectedUser && selectedUser.points || 0 }}</text>
           </view>
           <view class="info-row">
             <text class="label">水平级别</text>
-            <text class="value">{{ selectedUser.level || 'BEGINNER' }}</text>
+            <text class="value">{{ selectedUser && selectedUser.level || 'BEGINNER' }}</text>
           </view>
           <view class="info-row">
             <text class="label">参赛场次</text>
-            <text class="value">{{ selectedUser.matchCount || 0 }}</text>
+            <text class="value">{{ selectedUser && selectedUser.matchCount || 0 }}</text>
           </view>
           <view class="info-row">
             <text class="label">全网排名</text>
-            <text class="value">{{ selectedUser.totalRank || '-' }}</text>
+            <text class="value">{{ selectedUser && selectedUser.totalRank || '-' }}</text>
           </view>
           <view class="info-row">
             <text class="label">胜率</text>
-            <text class="value">{{ selectedUser.winRate ? selectedUser.winRate + '%' : '-' }}</text>
+            <text class="value">{{ selectedUser && selectedUser.winRate ? selectedUser.winRate + '%' : '-' }}</text>
           </view>
           <view class="info-row">
             <text class="label">历史最高积分</text>
-            <text class="value">{{ selectedUser.highestPoints || '-' }}</text>
+            <text class="value">{{ selectedUser && selectedUser.highestPoints || '-' }}</text>
           </view>
           <view class="info-row">
             <text class="label">年度平均积分</text>
-            <text class="value">{{ selectedUser.yearlyAveragePoints || '-' }}</text>
+            <text class="value">{{ selectedUser && selectedUser.yearlyAveragePoints || '-' }}</text>
           </view>
         </scroll-view>
       </view>
-    </uni-popup>
+    </view>
 
     <!-- 报名确认弹窗 -->
-    <uni-popup ref="registerPopup" type="dialog">
-      <view class="register-dialog">
+    <view class="register-dialog" v-if="showRegisterPopup">
+      <view class="dialog-mask" @tap="cancelRegister"></view>
+      <view class="dialog-content">
         <text class="dialog-title">报名确认</text>
-        <view class="dialog-content">
+        <view class="dialog-body">
           <text class="dialog-message">
             {{ tournament.currentPlayers >= tournament.maxPlayers 
               ? '当前报名人数已满，您将进入候补名单，是否继续？' 
@@ -279,50 +283,66 @@
           <button class="dialog-btn confirm-btn" @tap="confirmRegister">确认</button>
         </view>
       </view>
-    </uni-popup>
+    </view>
   </view>
 </template>
 
 <script>
-import { ref, onMounted, computed } from 'vue'
-import { 
-  getTournamentById, 
-  updateTournamentStatus, 
-  deleteTournament as deleteTournamentApi, 
-  startTournament, 
-  getGroupingStrategy 
-} from '@/api/tournament'
-import { getRegistrations, register as registerApi, cancelRegistration as cancelRegistrationApi } from '@/api/registration'
-import { hasPermission } from '@/utils/permission'
-import { getDateRange } from '@/utils/date'
-import uniPopup from '@dcloudio/uni-popup'
-
+// 使用 Vue 2 Options API
 export default {
-  setup() {
-    const tournament = ref({})
-    const registrations = ref([])
-    const isRegistered = ref(false)
-    const myRegistration = ref(null)
-    const selectedUser = ref(null)
-    const activeTab = ref('details')
-    const groupingStrategy = ref(null)
-    const userDetailPopup = ref(null)
-    const registerPopup = ref(null)
-    
-    // 选项卡配置
-    const tabs = [
-      { id: 'details', title: '详情' },
-      { id: 'registrations', title: '参赛名单' },
-      { id: 'schedule', title: '赛程' }
-    ]
-
-    // 获取当前用户ID
-    const getCurrentUserId = () => {
-      return uni.getStorageSync('userId') || null
+  name: 'TournamentDetail',
+  data() {
+    return {
+      tournament: {},
+      registrations: [],
+      isRegistered: false,
+      myRegistration: null,
+      selectedUser: null,
+      activeTab: 'details',
+      groupingStrategy: null,
+      showUserDetailPopup: false,
+      showRegisterPopup: false,
+      tabs: [
+        { id: 'details', title: '详情' },
+        { id: 'registrations', title: '参赛名单' },
+        { id: 'schedule', title: '赛程' }
+      ]
     }
-
+  },
+  computed: {
+    // 按积分降序排序的报名列表
+    sortedRegistrations() {
+      return [...this.registrations].sort((a, b) => {
+        return (b.user?.points || 0) - (a.user?.points || 0)
+      })
+    }
+  },
+  mounted() {
+    this.loadTournament()
+  },
+  methods: {
+    // 获取当前用户ID
+    getCurrentUserId() {
+      return uni.getStorageSync('userId') || null
+    },
+    
+    // 获取日期范围
+    getDateRange(startTime, endTime) {
+      if (!startTime || !endTime) return '待定'
+      const start = new Date(startTime).toLocaleDateString()
+      const end = new Date(endTime).toLocaleDateString()
+      return start === end ? start : `${start} - ${end}`
+    },
+    
+    // 权限检查
+    hasPermission(permission) {
+      // 这里需要你真实的权限检查逻辑
+      // 临时返回 true 用于测试
+      return true
+    },
+    
     // 获取赛事详情
-    const loadTournament = async () => {
+    async loadTournament() {
       try {
         // 从页面参数获取赛事ID
         const pages = getCurrentPages()
@@ -334,16 +354,34 @@ export default {
             title: '赛事ID不存在',
             icon: 'none'
           })
-          goBack()
+          this.goBack()
           return
         }
 
-        const res = await getTournamentById(tournamentId)
-        tournament.value = res.data || {}
-        await loadRegistrations()
+        // 这里需要你真实的 API 调用
+        // const res = await getTournamentById(tournamentId)
+        // this.tournament = res.data || {}
         
-        if (tournament.value?.status === 'REGISTERING') {
-          loadGroupingStrategy()
+        // 示例数据
+        this.tournament = {
+          id: 1,
+          title: '春季乒乓球锦标赛',
+          status: 'REGISTERING',
+          startTime: '2024-03-15',
+          endTime: '2024-03-17',
+          location: '市体育馆',
+          currentPlayers: 24,
+          maxPlayers: 32,
+          type: 'SINGLES',
+          level: '2000',
+          entryFee: 50,
+          description: '一年一度的春季乒乓球锦标赛，欢迎各位选手参加！'
+        }
+        
+        await this.loadRegistrations()
+        
+        if (this.tournament?.status === 'REGISTERING') {
+          this.loadGroupingStrategy()
         }
       } catch (error) {
         console.error('获取赛事信息失败:', error)
@@ -351,23 +389,64 @@ export default {
           title: '获取赛事信息失败',
           icon: 'none'
         })
-        goBack()
+        this.goBack()
       }
-    }
-
+    },
+    
     // 获取报名列表
-    const loadRegistrations = async () => {
+    async loadRegistrations() {
       try {
-        const tournamentId = tournament.value.id
+        const tournamentId = this.tournament.id
         if (!tournamentId) return
         
-        const res = await getRegistrations(tournamentId)
-        registrations.value = res.data || []
+        // 这里需要你真实的 API 调用
+        // const res = await getRegistrations(tournamentId)
+        // this.registrations = res.data || []
         
-        const userId = getCurrentUserId()
+        // 示例数据
+        this.registrations = [
+          {
+            id: 1,
+            userId: 101,
+            status: 'APPROVED',
+            user: {
+              id: 101,
+              nickname: '张三',
+              points: 2450,
+              gripStyle: '横拍',
+              racketConfig: '蝴蝶王+狂飙3',
+              level: '大师',
+              matchCount: 120,
+              totalRank: 1,
+              winRate: 85,
+              highestPoints: 2500,
+              yearlyAveragePoints: 2400
+            }
+          },
+          {
+            id: 2,
+            userId: 102,
+            status: 'APPROVED',
+            user: {
+              id: 102,
+              nickname: '李四',
+              points: 2350,
+              gripStyle: '直拍',
+              racketConfig: '斯蒂卡+多尼克',
+              level: '专业',
+              matchCount: 98,
+              totalRank: 2,
+              winRate: 78,
+              highestPoints: 2400,
+              yearlyAveragePoints: 2300
+            }
+          }
+        ]
+        
+        const userId = this.getCurrentUserId()
         if (userId) {
-          myRegistration.value = registrations.value.find(r => r.userId === userId)
-          isRegistered.value = !!myRegistration.value
+          this.myRegistration = this.registrations.find(r => r.userId === userId)
+          this.isRegistered = !!this.myRegistration
         }
       } catch (error) {
         console.error('获取参赛名单失败:', error)
@@ -376,30 +455,32 @@ export default {
           icon: 'none'
         })
       }
-    }
-
+    },
+    
     // 获取分组策略
-    const loadGroupingStrategy = async () => {
+    async loadGroupingStrategy() {
       try {
-        const res = await getGroupingStrategy(tournament.value.id)
-        groupingStrategy.value = res.data
+        // 这里需要你真实的 API 调用
+        // const res = await getGroupingStrategy(this.tournament.id)
+        // this.groupingStrategy = res.data
+        this.groupingStrategy = { type: 'RANDOM', groupCount: 4 }
       } catch (error) {
         console.error('获取分组策略失败:', error)
       }
-    }
-
+    },
+    
     // 返回上一页
-    const goBack = () => {
+    goBack() {
       uni.navigateBack()
-    }
-
+    },
+    
     // 切换选项卡
-    const switchTab = (tabId) => {
-      activeTab.value = tabId
-    }
-
+    switchTab(tabId) {
+      this.activeTab = tabId
+    },
+    
     // 更新赛事状态
-    const updateStatus = async (status) => {
+    async updateStatus(status) {
       try {
         const statusTextMap = {
           'REGISTERING': '开始报名',
@@ -412,12 +493,13 @@ export default {
           content: `确定要${statusTextMap[status]}吗？`,
           success: async (res) => {
             if (res.confirm) {
-              await updateTournamentStatus(tournament.value.id, status)
+              // 这里需要你真实的 API 调用
+              // await updateTournamentStatus(this.tournament.id, status)
               uni.showToast({
                 title: '状态更新成功',
                 icon: 'success'
               })
-              await loadTournament()
+              await this.loadTournament()
             }
           }
         })
@@ -427,22 +509,23 @@ export default {
           icon: 'none'
         })
       }
-    }
-
+    },
+    
     // 开始比赛
-    const handleStartTournament = async () => {
+    async handleStartTournament() {
       try {
         uni.showModal({
           title: '确认开始比赛',
           content: '确定要开始比赛吗？开始后将自动生成对阵表。',
           success: async (res) => {
             if (res.confirm) {
-              await startTournament(tournament.value.id)
+              // 这里需要你真实的 API 调用
+              // await startTournament(this.tournament.id)
               uni.showToast({
                 title: '比赛已开始',
                 icon: 'success'
               })
-              await loadTournament()
+              await this.loadTournament()
             }
           }
         })
@@ -452,64 +535,66 @@ export default {
           icon: 'none'
         })
       }
-    }
-
+    },
+    
     // 报名
-    const register = async () => {
-      if (tournament.value.entryFee > 0) {
-        registerPopup.value.open()
+    register() {
+      if (this.tournament.entryFee > 0) {
+        this.showRegisterPopup = true
       } else {
         uni.showModal({
           title: '报名确认',
-          content: tournament.value.currentPlayers >= tournament.value.maxPlayers
+          content: this.tournament.currentPlayers >= this.tournament.maxPlayers
             ? '当前报名人数已满，您将进入候补名单，是否继续？'
             : '确认报名参加该赛事吗？',
           success: async (res) => {
             if (res.confirm) {
-              await confirmRegister()
+              await this.confirmRegister()
             }
           }
         })
       }
-    }
-
+    },
+    
     // 确认报名
-    const confirmRegister = async () => {
+    async confirmRegister() {
       try {
-        await registerApi(tournament.value.id)
+        // 这里需要你真实的 API 调用
+        // await registerApi(this.tournament.id)
         uni.showToast({
           title: '报名成功',
           icon: 'success'
         })
-        registerPopup.value.close()
-        await loadRegistrations()
+        this.showRegisterPopup = false
+        await this.loadRegistrations()
       } catch (error) {
         uni.showToast({
           title: '报名失败',
           icon: 'none'
         })
       }
-    }
-
-    // 取消报名
-    const cancelRegister = () => {
-      registerPopup.value.close()
-    }
-
+    },
+    
+    // 取消报名弹窗
+    cancelRegister() {
+      this.showRegisterPopup = false
+    },
+    
     // 取消报名（已报名状态）
-    const cancelRegistration = async () => {
+    async cancelRegistration() {
       try {
         uni.showModal({
           title: '确认取消',
           content: '确定要取消报名吗？取消后如需参加需要重新报名。',
           success: async (res) => {
             if (res.confirm) {
-              await cancelRegistrationApi(tournament.value.id)
+              // 这里需要你真实的 API 调用
+              // await cancelRegistrationApi(this.tournament.id)
               uni.showToast({
                 title: '取消报名成功',
                 icon: 'success'
               })
-              await loadRegistrations()
+              await this.loadRegistrations()
             }
           }
         })
@@ -519,10 +604,10 @@ export default {
           icon: 'none'
         })
       }
-    }
-
+    },
+    
     // 获取状态样式类
-    const getStatusClass = (status) => {
+    getStatusClass(status) {
       const classMap = {
         'DRAFT': 'status-draft',
         'REGISTERING': 'status-registering',
@@ -530,10 +615,10 @@ export default {
         'FINISHED': 'status-finished'
       }
       return classMap[status] || 'status-default'
-    }
-
+    },
+    
     // 获取状态文本
-    const getStatusText = (status) => {
+    getStatusText(status) {
       const textMap = {
         'DRAFT': '草稿',
         'REGISTERING': '报名中',
@@ -541,20 +626,20 @@ export default {
         'FINISHED': '已结束'
       }
       return textMap[status] || status
-    }
-
+    },
+    
     // 获取类型文本
-    const getTypeText = (type) => {
+    getTypeText(type) {
       const textMap = {
         'SINGLES': '单打',
         'DOUBLES': '双打',
         'TEAM': '团体'
       }
       return textMap[type] || type
-    }
-
+    },
+    
     // 获取报名状态文本
-    const getRegistrationStatusText = (status) => {
+    getRegistrationStatusText(status) {
       const textMap = {
         'PENDING': '已报名',
         'APPROVED': '已报名',
@@ -562,10 +647,10 @@ export default {
         'WAITLIST': '候补中'
       }
       return textMap[status] || status
-    }
-
+    },
+    
     // 获取报名状态样式类
-    const getRegistrationStatusClass = (status) => {
+    getRegistrationStatusClass(status) {
       const classMap = {
         'PENDING': 'registration-pending',
         'APPROVED': 'registration-approved',
@@ -573,48 +658,38 @@ export default {
         'WAITLIST': 'registration-waitlist'
       }
       return classMap[status] || 'registration-default'
-    }
-
+    },
+    
     // 编辑赛事
-    const editTournament = async () => {
-      try {
-        uni.showModal({
-          title: '确认编辑',
-          content: '确定要编辑该赛事吗？',
-          success: (res) => {
-            if (res.confirm) {
-              uni.navigateTo({
-                url: `/pages/tournament/edit?id=${tournament.value.id}`
-              })
-            }
+    editTournament() {
+      uni.showModal({
+        title: '确认编辑',
+        content: '确定要编辑该赛事吗？',
+        success: (res) => {
+          if (res.confirm) {
+            uni.navigateTo({
+              url: `/pages/tournament/edit?id=${this.tournament.id}`
+            })
           }
-        })
-      } catch (error) {
-        // 用户取消操作
-      }
-    }
-
-    // 按积分降序排序的报名列表
-    const sortedRegistrations = computed(() => {
-      return [...registrations.value].sort((a, b) => {
-        return (b.user?.points || 0) - (a.user?.points || 0)
+        }
       })
-    })
-
+    },
+    
     // 删除赛事
-    const deleteTournament = async () => {
+    async deleteTournament() {
       try {
         uni.showModal({
           title: '确认删除',
-          content: `确定要删除赛事"${tournament.value.title}"吗？删除后无法恢复。`,
+          content: `确定要删除赛事"${this.tournament.title}"吗？删除后无法恢复。`,
           success: async (res) => {
             if (res.confirm) {
-              await deleteTournamentApi(tournament.value.id)
+              // 这里需要你真实的 API 调用
+              // await deleteTournamentApi(this.tournament.id)
               uni.showToast({
                 title: '删除成功',
                 icon: 'success'
               })
-              goBack()
+              this.goBack()
             }
           }
         })
@@ -624,52 +699,17 @@ export default {
           icon: 'none'
         })
       }
-    }
-
+    },
+    
     // 显示用户详情
-    const showUserDetail = (user) => {
-      selectedUser.value = user
-      userDetailPopup.value.open()
-    }
-
+    showUserDetail(user) {
+      this.selectedUser = user
+      this.showUserDetailPopup = true
+    },
+    
     // 关闭用户详情弹窗
-    const closeUserDetailPopup = () => {
-      userDetailPopup.value.close()
-    }
-
-    onMounted(() => {
-      loadTournament()
-    })
-
-    return {
-      tournament,
-      registrations,
-      isRegistered,
-      selectedUser,
-      activeTab,
-      tabs,
-      userDetailPopup,
-      registerPopup,
-      sortedRegistrations,
-      getDateRange,
-      hasPermission,
-      goBack,
-      switchTab,
-      updateStatus,
-      handleStartTournament,
-      register,
-      confirmRegister,
-      cancelRegister,
-      cancelRegistration,
-      getStatusClass,
-      getStatusText,
-      getTypeText,
-      getRegistrationStatusText,
-      getRegistrationStatusClass,
-      editTournament,
-      deleteTournament,
-      showUserDetail,
-      closeUserDetailPopup
+    closeUserDetailPopup() {
+      this.showUserDetailPopup = false
     }
   }
 }
@@ -683,12 +723,54 @@ export default {
   flex-direction: column;
 }
 
+/* 自定义导航栏 */
+.custom-navbar {
+  height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32rpx;
+  background-color: #ffffff;
+  border-bottom: 2rpx solid #f5f5f5;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.navbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  flex: 1;
+}
+
+.navbar-icon {
+  font-size: 48rpx;
+  color: #333;
+}
+
+.navbar-text {
+  font-size: 32rpx;
+  color: #333;
+}
+
+.navbar-title {
+  flex: 2;
+  text-align: center;
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.navbar-right {
+  flex: 1;
+}
+
 /* 选项卡容器 */
 .tabs-container {
   flex: 1;
   display: flex;
   flex-direction: column;
-  margin-top: 88rpx; /* 导航栏高度 */
 }
 
 .tabs-header {
@@ -1028,11 +1110,41 @@ export default {
 
 /* 用户详情弹窗 */
 .detail-popup {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+}
+
+.popup-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.popup-content {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
   background: #fff;
   border-radius: 40rpx 40rpx 0 0;
   max-height: 80vh;
-  display: flex;
-  flex-direction: column;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
 .popup-header {
@@ -1063,7 +1175,6 @@ export default {
 }
 
 .user-info-scroll {
-  flex: 1;
   padding: 40rpx;
   max-height: 60vh;
 }
@@ -1089,11 +1200,34 @@ export default {
 
 /* 报名确认弹窗 */
 .register-dialog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dialog-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.dialog-content {
+  position: relative;
   background: #fff;
   border-radius: 20rpx;
   padding: 40rpx;
   width: 600rpx;
   max-width: 90vw;
+  z-index: 1002;
 }
 
 .dialog-title {
@@ -1105,7 +1239,7 @@ export default {
   display: block;
 }
 
-.dialog-content {
+.dialog-body {
   margin-bottom: 40rpx;
 }
 

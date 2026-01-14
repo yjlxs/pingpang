@@ -54,7 +54,7 @@
         <view v-show="activeTab === 'knockout' && knockoutStage" class="tab-pane">
           <view class="knockout-stage">
             <tournament-bracket 
-              :matches="knockoutStage.matches" 
+              :matches="knockoutMatches" 
               :tournament-id="tournamentId" 
               @score-updated="handleScoreUpdated" 
             />
@@ -65,118 +65,134 @@
   </view>
 </template>
 
-<script setup>
-import { ref, onMounted, computed } from 'vue'
-import { getTournamentStages } from '@/api/tournament'
-import TournamentGroup from './TournamentGroup.vue'
-import TournamentBracket from './TournamentBracket.vue'
-
-const activeTab = ref('group')
-const activeGroup = ref(0)
-const stagesData = ref([])
-
-const props = defineProps({
-  tournamentId: {
-    type: [String, Number],
-    required: true
-  }
-})
-
-// 计算可用的 tabs
-const tabs = computed(() => {
-  const availableTabs = []
-  
-  if (groupStage.value) {
-    availableTabs.push({ name: 'group', title: '小组赛' })
-  }
-  
-  if (knockoutStage.value) {
-    availableTabs.push({ name: 'knockout', title: '淘汰赛' })
-  }
-  
-  return availableTabs
-})
-
-// 获取小组赛阶段
-const groupStage = computed(() => {
-  return stagesData.value.find(stage => stage.type === 'GROUP')
-})
-
-// 获取淘汰赛阶段
-const knockoutStage = computed(() => {
-  const stage = stagesData.value.find(stage => stage.type === 'KNOCKOUT')
-  if (!stage) return null
-  return {
-    ...stage,
-    matches: stage.matches || []
-  }
-})
-
-// 按小组分组比赛
-const groupMatches = computed(() => {
-  if (!groupStage.value?.matches) return []
-  
-  const groups = {}
-  groupStage.value.matches.forEach(match => {
-    const groupName = match.groupName || '默认小组'
-    if (!groups[groupName]) {
-      groups[groupName] = {
-        name: groupName,
-        matches: []
+<script>
+// 使用 Vue 2 Options API
+export default {
+  name: 'TournamentSchedule',
+  props: {
+    tournamentId: {
+      type: [String, Number],
+      required: true
+    }
+  },
+  data() {
+    return {
+      activeTab: 'group',
+      activeGroup: 0,
+      stagesData: []
+    }
+  },
+  computed: {
+    // 计算可用的 tabs
+    tabs() {
+      const availableTabs = []
+      
+      if (this.groupStage) {
+        availableTabs.push({ name: 'group', title: '小组赛' })
       }
+      
+      if (this.knockoutStage) {
+        availableTabs.push({ name: 'knockout', title: '淘汰赛' })
+      }
+      
+      return availableTabs
+    },
+    
+    // 获取小组赛阶段
+    groupStage() {
+      return this.stagesData.find(stage => stage.type === 'GROUP')
+    },
+    
+    // 获取淘汰赛阶段
+    knockoutStage() {
+      return this.stagesData.find(stage => stage.type === 'KNOCKOUT')
+    },
+    
+    // 淘汰赛比赛数据
+    knockoutMatches() {
+      return this.knockoutStage?.matches || []
+    },
+    
+    // 按小组分组比赛
+    groupMatches() {
+      if (!this.groupStage?.matches) return []
+      
+      const groups = {}
+      this.groupStage.matches.forEach(match => {
+        const groupName = match.groupName || '默认小组'
+        if (!groups[groupName]) {
+          groups[groupName] = {
+            name: groupName,
+            matches: []
+          }
+        }
+        groups[groupName].matches.push(match)
+      })
+      
+      return Object.values(groups)
     }
-    groups[groupName].matches.push(match)
-  })
-  
-  return Object.values(groups)
-})
-
-// 切换主 tab
-const switchTab = (tabName) => {
-  activeTab.value = tabName
-  if (tabName === 'group' && groupMatches.value.length > 0) {
-    activeGroup.value = 0
+  },
+  methods: {
+    // 切换主 tab
+    switchTab(tabName) {
+      this.activeTab = tabName
+      if (tabName === 'group' && this.groupMatches.length > 0) {
+        this.activeGroup = 0
+      }
+    },
+    
+    // 切换小组 tab
+    switchGroup(index) {
+      this.activeGroup = index
+    },
+    
+    // 加载赛事数据
+    async loadTournamentData() {
+      try {
+        // 这里需要你真实的 API 调用
+        // const response = await getTournamentStages(this.tournamentId)
+        // this.stagesData = response.data || []
+        
+        // 示例数据 - 开发时使用
+        this.stagesData = [
+          {
+            type: 'GROUP',
+            status: 'ONGOING',
+            matches: [
+              { id: 1, player1Name: '选手A', player2Name: '选手B', status: 'FINISHED', player1Score: 11, player2Score: 8, winner: 'PLAYER1' },
+              { id: 2, player1Name: '选手C', player2Name: '选手D', status: 'ONGOING', player1Score: 5, player2Score: 7 }
+            ]
+          }
+        ]
+        
+        // 自动切换到进行中的阶段
+        const ongoingStage = this.stagesData.find(stage => stage.status === 'ONGOING')
+        if (ongoingStage) {
+          this.activeTab = ongoingStage.type.toLowerCase()
+        }
+        
+        // 如果没有小组赛，自动切换到淘汰赛
+        if (!this.groupStage && this.knockoutStage) {
+          this.activeTab = 'knockout'
+        }
+      } catch (error) {
+        console.error('加载赛事数据失败:', error)
+        uni.showToast({
+          title: '加载数据失败',
+          icon: 'none'
+        })
+      }
+    },
+    
+    // 处理比分更新
+    async handleScoreUpdated() {
+      await this.loadTournamentData()
+    }
+  },
+  mounted() {
+    this.loadTournamentData()
   }
 }
-
-// 切换小组 tab
-const switchGroup = (index) => {
-  activeGroup.value = index
-}
-
-// 加载赛事数据
-const loadTournamentData = async () => {
-  try {
-    const response = await getTournamentStages(props.tournamentId)
-    stagesData.value = response.data || []
-    
-    // 自动切换到进行中的阶段
-    const ongoingStage = stagesData.value.find(stage => stage.status === 'ONGOING')
-    if (ongoingStage) {
-      activeTab.value = ongoingStage.type.toLowerCase()
-    }
-    
-    // 如果没有小组赛，自动切换到淘汰赛
-    if (!groupStage.value && knockoutStage.value) {
-      activeTab.value = 'knockout'
-    }
-  } catch (error) {
-    console.error('加载赛事数据失败:', error)
-    uni.showToast({
-      title: '加载数据失败',
-      icon: 'none'
-    })
-  }
-}
-
-// 处理比分更新
-const handleScoreUpdated = async () => {
-  await loadTournamentData()
-}
-
-onMounted(() => {
-  loadTournamentData()
-})
 </script>
 
 <style scoped>

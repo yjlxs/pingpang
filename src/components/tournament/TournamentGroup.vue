@@ -21,7 +21,7 @@
         <view class="cell">{{ player.totalScore || 0 }}</view>
         <view class="cell">{{ player.totalLost || 0 }}</view>
         <view class="cell" :class="{'positive': player.scoreDiff > 0, 'negative': player.scoreDiff < 0}">
-          {{ player.scoreDiff > 0 ? '+' : ''}}{{ player.scoreDiff || 0 }}
+          {{ player.scoreDiff > 0 ? '+' : '' }}{{ player.scoreDiff || 0 }}
         </view>
       </view>
     </view>
@@ -52,217 +52,213 @@
       </view>
     </view>
 
-    <!-- 比分设置弹窗 - 修改为 uni-popup -->
-    <uni-popup ref="scorePopup" type="center" :mask-click="true">
-      <view class="score-dialog" v-if="currentMatch">
+    <!-- 比分设置弹窗 - 使用原生弹窗 -->
+    <view v-if="showScoreDialog" class="popup-mask" @tap="closeScoreDialog">
+      <view class="popup-content" @tap.stop>
         <view class="dialog-header">
           <text>设置比分</text>
-          <view class="close-icon" @tap="closeScoreDialog">
-            <text>×</text>
-          </view>
+          <text class="close-btn" @tap="closeScoreDialog">×</text>
         </view>
-        <view class="dialog-content">
+        <view class="dialog-body">
           <view class="score-row">
-            <text class="player-name">{{ currentMatch?.player1Name }}</text>
-            <input
-              v-model="player1Score"
-              type="number"
-              input-align="center"
-              placeholder="请输入比分"
-              class="score-input"
-            />
-            <view class="score-buttons">
-              <view class="score-btn up" @tap="() => adjustScore(1, 1)">
-                <text>▲</text>
-              </view>
-              <view class="score-btn down" @tap="() => adjustScore(1, -1)">
-                <text>▼</text>
+            <text class="player-name">{{ currentMatch && currentMatch.player1Name }}</text>
+            <view class="score-input-wrapper">
+              <input
+                v-model="player1Score"
+                type="number"
+                class="score-input"
+                placeholder="比分"
+              />
+              <view class="score-buttons">
+                <text class="score-btn up" @tap="adjustScore(1, 1)">▲</text>
+                <text class="score-btn down" @tap="adjustScore(1, -1)">▼</text>
               </view>
             </view>
           </view>
           <view class="score-row">
-            <text class="player-name">{{ currentMatch?.player2Name }}</text>
-            <input
-              v-model="player2Score"
-              type="number"
-              input-align="center"
-              placeholder="请输入比分"
-              class="score-input"
-            />
-            <view class="score-buttons">
-              <view class="score-btn up" @tap="() => adjustScore(2, 1)">
-                <text>▲</text>
-              </view>
-              <view class="score-btn down" @tap="() => adjustScore(2, -1)">
-                <text>▼</text>
+            <text class="player-name">{{ currentMatch && currentMatch.player2Name }}</text>
+            <view class="score-input-wrapper">
+              <input
+                v-model="player2Score"
+                type="number"
+                class="score-input"
+                placeholder="比分"
+              />
+              <view class="score-buttons">
+                <text class="score-btn up" @tap="adjustScore(2, 1)">▲</text>
+                <text class="score-btn down" @tap="adjustScore(2, -1)">▼</text>
               </view>
             </view>
           </view>
         </view>
         <view class="dialog-footer">
-          <button class="cancel-btn" @tap="closeScoreDialog" style="margin-bottom: 12px">取消</button>
-          <button type="primary" class="confirm-btn" @tap="handleScoreSubmit">确认</button>
+          <button class="cancel-btn" @tap="closeScoreDialog">取消</button>
+          <button class="confirm-btn" @tap="handleScoreSubmit">确认</button>
         </view>
       </view>
-    </uni-popup>
+    </view>
   </view>
 </template>
 
-<script setup>
-import { ref, computed } from 'vue'
-import uniPopup from '@dcloudio/uni-popup'
-import { updateMatchScore } from '@/api/match'
-
-const props = defineProps({
-  matches: {
-    type: Array,
-    default: () => []
+<script>
+// 使用 Vue 2 Options API
+export default {
+  name: 'TournamentGroup',
+  props: {
+    matches: {
+      type: Array,
+      default: () => []
+    },
+    tournamentId: {
+      type: [String, Number],
+      required: true
+    }
   },
-  tournamentId: {
-    type: [String, Number],
-    required: true
-  }
-})
-
-const emit = defineEmits(['score-updated'])
-
-const scorePopup = ref(null)
-const currentMatch = ref(null)
-const player1Score = ref('0')
-const player2Score = ref('0')
-
-const handleMatchClick = (match) => {
-  if (match.status === 'FINISHED') return
-  currentMatch.value = match
-  player1Score.value = String(match.player1Score || 0)
-  player2Score.value = String(match.player2Score || 0)
-  scorePopup.value.open()
-}
-
-const closeScoreDialog = () => {
-  scorePopup.value.close()
-}
-
-const adjustScore = (player, delta) => {
-  const scoreRef = player === 1 ? player1Score : player2Score
-  const currentScore = parseInt(scoreRef.value) || 0
-  scoreRef.value = String(Math.max(0, currentScore + delta))
-}
-
-const handleScoreSubmit = async () => {
-  try {
-    const score1 = parseInt(player1Score.value) || 0
-    const score2 = parseInt(player2Score.value) || 0
-    
-    if (score1 === score2) {
-      uni.showToast({
-        title: '比分不能相等',
-        icon: 'none'
-      })
-      return
+  data() {
+    return {
+      showScoreDialog: false,
+      currentMatch: null,
+      player1Score: '0',
+      player2Score: '0'
     }
+  },
+  computed: {
+    // 计算小组积分榜
+    groupStandings() {
+      const players = new Map()
+      
+      // 初始化所有选手数据
+      this.matches.forEach(match => {
+        if (!players.has(match.player1Id)) {
+          players.set(match.player1Id, {
+            id: match.player1Id,
+            name: match.player1Name,
+            wins: 0,
+            losses: 0,
+            points: 0,
+            totalScore: 0,
+            totalLost: 0,
+            scoreDiff: 0
+          })
+        }
+        if (!players.has(match.player2Id)) {
+          players.set(match.player2Id, {
+            id: match.player2Id,
+            name: match.player2Name,
+            wins: 0,
+            losses: 0,
+            points: 0,
+            totalScore: 0,
+            totalLost: 0,
+            scoreDiff: 0
+          })
+        }
+      })
 
-    await updateMatchScore({
-      tournamentId: props.tournamentId,
-      matchId: currentMatch.value.id,
-      player1Score: score1,
-      player2Score: score2
-    })
+      // 统计比赛结果
+      this.matches.forEach(match => {
+        if (match.status === 'FINISHED') {
+          const player1 = players.get(match.player1Id)
+          const player2 = players.get(match.player2Id)
+          
+          // 累加得分
+          player1.totalScore += parseInt(match.player1Score) || 0
+          player2.totalScore += parseInt(match.player2Score) || 0
+          
+          // 累加失分
+          player1.totalLost += parseInt(match.player2Score) || 0
+          player2.totalLost += parseInt(match.player1Score) || 0
+          
+          // 计算净胜分
+          player1.scoreDiff = player1.totalScore - player1.totalLost
+          player2.scoreDiff = player2.totalScore - player2.totalLost
+          
+          if (match.winner === 'PLAYER1') {
+            player1.wins++
+            player1.points += 2
+            player2.losses++
+          } else if (match.winner === 'PLAYER2') {
+            player2.wins++
+            player2.points += 2
+            player1.losses++
+          }
+        }
+      })
 
-    uni.showToast({
-      title: '比分更新成功',
-      icon: 'success'
-    })
-    
-    closeScoreDialog()
-    
-    // 触发更新事件
-    emit('score-updated')
-  } catch (error) {
-    console.error('更新比分失败:', error)
-    uni.showToast({
-      title: '比分更新失败',
-      icon: 'error'
-    })
-  }
-}
-
-// 计算小组积分榜
-const groupStandings = computed(() => {
-  const players = new Map()
-  
-  // 初始化所有选手数据
-  props.matches.forEach(match => {
-    if (!players.has(match.player1Id)) {
-      players.set(match.player1Id, {
-        id: match.player1Id,
-        name: match.player1Name,
-        wins: 0,
-        losses: 0,
-        points: 0,
-        totalScore: 0,
-        totalLost: 0,
-        scoreDiff: 0
+      // 转换为数组并排序
+      return Array.from(players.values()).sort((a, b) => {
+        if (b.points !== a.points) {
+          return b.points - a.points
+        }
+        if (b.wins !== a.wins) {
+          return b.wins - a.wins
+        }
+        if (b.scoreDiff !== a.scoreDiff) {
+          return b.scoreDiff - a.scoreDiff
+        }
+        return b.totalScore - a.totalScore
       })
     }
-    if (!players.has(match.player2Id)) {
-      players.set(match.player2Id, {
-        id: match.player2Id,
-        name: match.player2Name,
-        wins: 0,
-        losses: 0,
-        points: 0,
-        totalScore: 0,
-        totalLost: 0,
-        scoreDiff: 0
-      })
-    }
-  })
+  },
+  methods: {
+    handleMatchClick(match) {
+      if (match.status === 'FINISHED') return
+      this.currentMatch = match
+      this.player1Score = String(match.player1Score || 0)
+      this.player2Score = String(match.player2Score || 0)
+      this.showScoreDialog = true
+    },
+    
+    closeScoreDialog() {
+      this.showScoreDialog = false
+    },
+    
+    adjustScore(player, delta) {
+      const scoreKey = player === 1 ? 'player1Score' : 'player2Score'
+      const currentScore = parseInt(this[scoreKey]) || 0
+      this[scoreKey] = String(Math.max(0, currentScore + delta))
+    },
+    
+    async handleScoreSubmit() {
+      try {
+        const score1 = parseInt(this.player1Score) || 0
+        const score2 = parseInt(this.player2Score) || 0
+        
+        if (score1 === score2) {
+          uni.showToast({
+            title: '比分不能相等',
+            icon: 'none'
+          })
+          return
+        }
 
-  // 统计比赛结果
-  props.matches.forEach(match => {
-    if (match.status === 'FINISHED') {
-      const player1 = players.get(match.player1Id)
-      const player2 = players.get(match.player2Id)
-      
-      // 累加得分
-      player1.totalScore += parseInt(match.player1Score) || 0
-      player2.totalScore += parseInt(match.player2Score) || 0
-      
-      // 累加失分
-      player1.totalLost += parseInt(match.player2Score) || 0
-      player2.totalLost += parseInt(match.player1Score) || 0
-      
-      // 计算净胜分
-      player1.scoreDiff = player1.totalScore - player1.totalLost
-      player2.scoreDiff = player2.totalScore - player2.totalLost
-      
-      if (match.winner === 'PLAYER1') {
-        player1.wins++
-        player1.points += 2
-        player2.losses++
-      } else if (match.winner === 'PLAYER2') {
-        player2.wins++
-        player2.points += 2
-        player1.losses++
+        // 这里需要你真实的 API 调用
+        // await updateMatchScore({
+        //   tournamentId: this.tournamentId,
+        //   matchId: this.currentMatch.id,
+        //   player1Score: score1,
+        //   player2Score: score2
+        // })
+
+        uni.showToast({
+          title: '比分更新成功',
+          icon: 'success'
+        })
+        
+        this.closeScoreDialog()
+        
+        // 触发更新事件
+        this.$emit('score-updated')
+      } catch (error) {
+        console.error('更新比分失败:', error)
+        uni.showToast({
+          title: '比分更新失败',
+          icon: 'none'
+        })
       }
     }
-  })
-
-  // 转换为数组并排序
-  return Array.from(players.values()).sort((a, b) => {
-    if (b.points !== a.points) {
-      return b.points - a.points
-    }
-    if (b.wins !== a.wins) {
-      return b.wins - a.wins
-    }
-    if (b.scoreDiff !== a.scoreDiff) {
-      return b.scoreDiff - a.scoreDiff
-    }
-    return b.totalScore - a.totalScore
-  })
-})
+  }
+}
 </script>
 
 <style scoped>
@@ -424,12 +420,25 @@ const groupStandings = computed(() => {
 }
 
 /* 弹窗样式 */
-.score-dialog {
-  padding: 40rpx;
+.popup-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.popup-content {
   background: white;
   border-radius: 24rpx;
   width: 600rpx;
   max-width: 90vw;
+  padding: 40rpx;
 }
 
 .dialog-header {
@@ -441,19 +450,15 @@ const groupStandings = computed(() => {
   font-weight: 500;
 }
 
-.close-icon {
-  width: 60rpx;
-  height: 60rpx;
-  border-radius: 50%;
-  background: #f5f5f5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 36rpx;
+.close-btn {
+  font-size: 32rpx;
   color: #999;
+  padding: 10rpx 20rpx;
+  line-height: 1;
+  cursor: pointer;
 }
 
-.dialog-content {
+.dialog-body {
   padding: 0 0 48rpx;
 }
 
@@ -468,18 +473,14 @@ const groupStandings = computed(() => {
   margin-bottom: 0;
 }
 
-.player-name {
-  flex: 1;
-  margin-right: 32rpx;
-  font-size: 32rpx;
-}
-
-.dialog-footer {
-  padding-top: 0;
+.score-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
 }
 
 .score-input {
-  width: 240rpx;
+  width: 200rpx;
   height: 72rpx;
   background: #f7f8fa;
   border: 2rpx solid #ebedf0;
@@ -494,32 +495,35 @@ const groupStandings = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 8rpx;
-  padding-left: 16rpx;
 }
 
 .score-btn {
   width: 60rpx;
-  height: 60rpx;
-  border-radius: 8rpx;
-  background: #f5f5f5;
+  height: 30rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24rpx;
-  color: #666;
+  font-size: 20rpx;
+  color: white;
+  border-radius: 4rpx;
+  cursor: pointer;
 }
 
 .score-btn.up {
   background: #1989fa;
-  color: white;
 }
 
 .score-btn.down {
   background: #ff976a;
-  color: white;
+}
+
+.dialog-footer {
+  display: flex;
+  gap: 20rpx;
 }
 
 .cancel-btn, .confirm-btn {
+  flex: 1;
   height: 88rpx;
   font-size: 28rpx;
   border-radius: 16rpx;

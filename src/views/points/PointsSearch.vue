@@ -1,7 +1,14 @@
 <template>
   <view class="points-search">
-    <!-- 导航栏改为 uni-app 格式 -->
-    <uni-nav-bar title="查积分" left-icon="arrow-left" @click-left="goBack" fixed />
+    <!-- 自定义导航栏 -->
+    <view class="custom-navbar">
+      <view class="navbar-left" @tap="goBack">
+        <text class="navbar-icon">‹</text>
+        <text class="navbar-text">返回</text>
+      </view>
+      <text class="navbar-title">查积分</text>
+      <view class="navbar-right"></view>
+    </view>
     
     <!-- 搜索框 -->
     <view class="search-box">
@@ -56,8 +63,9 @@
     </view>
 
     <!-- 用户详情弹窗 -->
-    <uni-popup ref="detailPopup" type="bottom" :mask-click="true" @maskClick="closeDetailPopup">
-      <view class="detail-popup" v-if="selectedUser">
+    <view class="detail-popup" v-if="showDetailPopup">
+      <view class="popup-mask" @tap="closeDetailPopup"></view>
+      <view class="popup-content">
         <view class="popup-header">
           <text class="header-title">详细信息</text>
           <view class="close-btn" @tap="closeDetailPopup">
@@ -67,79 +75,74 @@
         <scroll-view class="user-info" scroll-y>
           <view class="info-row">
             <text class="label">ID</text>
-            <text class="value">{{ selectedUser.id }}</text>
+            <text class="value">{{ selectedUser && selectedUser.id }}</text>
           </view>
           <view class="info-row">
             <text class="label">昵称</text>
-            <text class="value">{{ selectedUser.nickname }}</text>
+            <text class="value">{{ selectedUser && selectedUser.nickname }}</text>
           </view>
           <view class="info-row">
             <text class="label">握拍方式</text>
-            <text class="value">{{ selectedUser.gripStyle || '未设置' }}</text>
+            <text class="value">{{ selectedUser && selectedUser.gripStyle || '未设置' }}</text>
           </view>
           <view class="info-row">
             <text class="label">球拍配置</text>
-            <text class="value">{{ selectedUser.racketConfig || '未设置' }}</text>
+            <text class="value">{{ selectedUser && selectedUser.racketConfig || '未设置' }}</text>
           </view>
           <view class="info-row">
             <text class="label">当前积分</text>
-            <text class="value">{{ selectedUser.points || 0 }}</text>
+            <text class="value">{{ selectedUser && selectedUser.points || 0 }}</text>
           </view>
           <view class="info-row">
             <text class="label">水平级别</text>
-            <text class="value">{{ selectedUser.level || 'BEGINNER' }}</text>
+            <text class="value">{{ selectedUser && selectedUser.level || 'BEGINNER' }}</text>
           </view>
           <view class="info-row">
             <text class="label">参赛场次</text>
-            <text class="value">{{ selectedUser.matchCount || 0 }}</text>
+            <text class="value">{{ selectedUser && selectedUser.matchCount || 0 }}</text>
           </view>
           <view class="info-row">
             <text class="label">全网排名</text>
-            <text class="value">{{ selectedUser.totalRank || '-' }}</text>
+            <text class="value">{{ selectedUser && selectedUser.totalRank || '-' }}</text>
           </view>
           <view class="info-row">
             <text class="label">胜率</text>
-            <text class="value">{{ selectedUser.winRate ? selectedUser.winRate + '%' : '-' }}</text>
+            <text class="value">{{ selectedUser && selectedUser.winRate ? selectedUser.winRate + '%' : '-' }}</text>
           </view>
           <view class="info-row">
             <text class="label">历史最高积分</text>
-            <text class="value">{{ selectedUser.highestPoints || '-' }}</text>
+            <text class="value">{{ selectedUser && selectedUser.highestPoints || '-' }}</text>
           </view>
           <view class="info-row">
             <text class="label">年度平均积分</text>
-            <text class="value">{{ selectedUser.yearlyAveragePoints || '-' }}</text>
+            <text class="value">{{ selectedUser && selectedUser.yearlyAveragePoints || '-' }}</text>
           </view>
         </scroll-view>
       </view>
-    </uni-popup>
+    </view>
   </view>
 </template>
 
 <script>
-import { ref } from 'vue'
-import { searchUserPoints } from '@/api/points'
-import uniPopup from '@dcloudio/uni-popup'
-import uniNavBar from '@/components/uni-nav-bar/uni-nav-bar.vue'
-
+// 使用 Vue 2 Options API
 export default {
   name: 'PointsSearch',
-  components: {
-    uniPopup,
-    uniNavBar
-  },
-  setup() {
-    const searchValue = ref('')
-    const searchResults = ref([])
-    const hasSearched = ref(false)
-    const selectedUser = ref(null)
-    const detailPopup = ref(null)
-
-    const goBack = () => {
-      uni.navigateBack()
+  data() {
+    return {
+      searchValue: '',
+      searchResults: [],
+      hasSearched: false,
+      selectedUser: null,
+      showDetailPopup: false
     }
-
-    const onSearch = async () => {
-      if (!searchValue.value.trim()) {
+  },
+  methods: {
+    goBack() {
+      uni.navigateBack()
+    },
+    
+    async onSearch() {
+      if (!this.searchValue.trim()) {
         uni.showToast({
           title: '请输入搜索内容',
           icon: 'none'
@@ -148,36 +151,61 @@ export default {
       }
 
       try {
-        const res = await searchUserPoints(searchValue.value)
-        searchResults.value = res.data
-        hasSearched.value = true
+        // 这里需要你真实的 API 调用
+        // const res = await searchUserPoints(this.searchValue)
+        // this.searchResults = res.data
+        
+        // 示例数据 - 开发时使用
+        this.searchResults = [
+          {
+            id: 1,
+            rank: 1,
+            nickname: '张三',
+            gender: '男',
+            points: 2450,
+            level: '大师',
+            totalRank: 1,
+            matchCount: 120,
+            gripStyle: '横拍',
+            racketConfig: '蝴蝶王+狂飙3',
+            winRate: 85,
+            highestPoints: 2500,
+            yearlyAveragePoints: 2400
+          },
+          {
+            id: 2,
+            rank: 2,
+            nickname: '李四',
+            gender: '女',
+            points: 2350,
+            level: '专业',
+            totalRank: 2,
+            matchCount: 98,
+            gripStyle: '直拍',
+            racketConfig: '斯蒂卡+多尼克',
+            winRate: 78,
+            highestPoints: 2400,
+            yearlyAveragePoints: 2300
+          }
+        ]
+        
+        this.hasSearched = true
       } catch (error) {
         uni.showToast({
           title: '搜索失败',
           icon: 'none'
         })
       }
-    }
-
-    const showDetail = (user) => {
-      selectedUser.value = user
-      detailPopup.value.open()
-    }
-
-    const closeDetailPopup = () => {
-      detailPopup.value.close()
-    }
-
-    return {
-      searchValue,
-      searchResults,
-      hasSearched,
-      selectedUser,
-      detailPopup,
-      goBack,
-      onSearch,
-      showDetail,
-      closeDetailPopup
+    },
+    
+    showDetail(user) {
+      this.selectedUser = user
+      this.showDetailPopup = true
+    },
+    
+    closeDetailPopup() {
+      this.showDetailPopup = false
+      this.selectedUser = null
     }
   }
 }
@@ -191,12 +219,55 @@ export default {
   flex-direction: column;
 }
 
+/* 自定义导航栏 */
+.custom-navbar {
+  height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32rpx;
+  background-color: #ffffff;
+  border-bottom: 2rpx solid #f5f5f5;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.navbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  flex: 1;
+}
+
+.navbar-icon {
+  font-size: 48rpx;
+  color: #333;
+}
+
+.navbar-text {
+  font-size: 32rpx;
+  color: #333;
+}
+
+.navbar-title {
+  flex: 2;
+  text-align: center;
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.navbar-right {
+  flex: 1;
+}
+
 /* 搜索框样式 */
 .search-box {
   background-color: #fff;
   padding: 20rpx 30rpx;
   position: sticky;
-  top: 0;
+  top: 88rpx;
   z-index: 98;
   box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
 }
@@ -334,11 +405,41 @@ export default {
 
 /* 弹窗样式 */
 .detail-popup {
-  background: #fff;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+}
+
+.popup-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.popup-content {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
   border-radius: 40rpx 40rpx 0 0;
   max-height: 80vh;
-  display: flex;
-  flex-direction: column;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
 .popup-header {
@@ -369,7 +470,6 @@ export default {
 }
 
 .user-info {
-  flex: 1;
   padding: 40rpx;
   max-height: 60vh;
 }

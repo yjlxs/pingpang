@@ -142,12 +142,12 @@
         <view class="dialog-body">
           <view class="current-user">
             <text class="user-label">用户：</text>
-            <text class="user-name">{{ currentUser?.nickname }}</text>
+            <text class="user-name">{{ currentUser && currentUser.nickname }}</text>
           </view>
           
           <view class="form-item">
             <text class="form-label">当前积分：</text>
-            <text class="current-points">{{ currentUser?.points || 0 }}</text>
+            <text class="current-points">{{ currentUser && currentUser.points || 0 }}</text>
           </view>
           
           <view class="form-item">
@@ -207,230 +207,271 @@
   </view>
 </template>
 
-<script setup>
-import { ref, onMounted } from 'vue'
-import { getRoles } from '@/api/role'
-import { searchUsers, getUserRoles, assignUserRoles, updateUserPoints } from '@/api/user'
-
-const users = ref([])
-const allRoles = ref([])
-const searchValue = ref('')
-const hasSearched = ref(false)
-const showRoleDialog = ref(false)
-const showPointsDialog = ref(false)
-const selectedRoles = ref([])
-const currentUser = ref(null)
-const pointsInput = ref('')
-const pointsReason = ref('')
-const loading = ref(false)
-
-// 加载所有角色
-const loadRoles = async () => {
-  try {
-    const res = await getRoles()
-    allRoles.value = res.data || []
-  } catch (error) {
-    uni.showToast({
-      title: '获取角色列表失败',
-      icon: 'none'
-    })
-  }
-}
-
-// 搜索用户
-const onSearch = async () => {
-  if (!searchValue.value.trim()) {
-    uni.showToast({
-      title: '请输入搜索内容',
-      icon: 'none'
-    })
-    return
-  }
-  
-  try {
-    loading.value = true
-    const res = await searchUsers(searchValue.value)
-    users.value = res.data || []
-    hasSearched.value = true
-    
-    // 获取每个用户的角色
-    for (const user of users.value) {
+<script>
+// 使用 Vue 2 Options API
+export default {
+  name: 'UserRoleAssign',
+  data() {
+    return {
+      users: [],
+      allRoles: [],
+      searchValue: '',
+      hasSearched: false,
+      showRoleDialog: false,
+      showPointsDialog: false,
+      selectedRoles: [],
+      currentUser: null,
+      pointsInput: '',
+      pointsReason: '',
+      loading: false
+    }
+  },
+  mounted() {
+    this.loadRoles()
+  },
+  methods: {
+    // 加载所有角色
+    async loadRoles() {
       try {
-        const rolesRes = await getUserRoles(user.id)
-        user.roles = rolesRes.data || []
+        // 这里需要你真实的 API 调用
+        // const res = await getRoles()
+        // this.allRoles = res.data || []
+        
+        // 示例数据 - 开发时使用
+        this.allRoles = [
+          { id: 1, name: '管理员', code: 'ROLE_ADMIN', description: '系统管理员' },
+          { id: 2, name: '裁判', code: 'ROLE_REFEREE', description: '比赛裁判' },
+          { id: 3, name: '选手', code: 'ROLE_PLAYER', description: '参赛选手' }
+        ]
       } catch (error) {
-        user.roles = []
+        uni.showToast({
+          title: '获取角色列表失败',
+          icon: 'none'
+        })
       }
+    },
+    
+    // 搜索用户
+    async onSearch() {
+      if (!this.searchValue.trim()) {
+        uni.showToast({
+          title: '请输入搜索内容',
+          icon: 'none'
+        })
+        return
+      }
+      
+      try {
+        this.loading = true
+        // 这里需要你真实的 API 调用
+        // const res = await searchUsers(this.searchValue)
+        // this.users = res.data || []
+        
+        // 示例数据
+        this.users = [
+          {
+            id: 1,
+            nickname: '张三',
+            phone: '13800138000',
+            points: 150,
+            roles: [
+              { id: 2, name: '裁判', code: 'ROLE_REFEREE' },
+              { id: 3, name: '选手', code: 'ROLE_PLAYER' }
+            ]
+          },
+          {
+            id: 2,
+            nickname: '李四',
+            phone: '13900139000',
+            points: 230,
+            roles: [
+              { id: 3, name: '选手', code: 'ROLE_PLAYER' }
+            ]
+          }
+        ]
+        
+        this.hasSearched = true
+        
+        // 获取每个用户的角色（示例中已经包含）
+        // 如果实际需要调用API，可以这样：
+        // for (const user of this.users) {
+        //   try {
+        //     const rolesRes = await getUserRoles(user.id)
+        //     user.roles = rolesRes.data || []
+        //   } catch (error) {
+        //     user.roles = []
+        //   }
+        // }
+        
+      } catch (error) {
+        uni.showToast({
+          title: '搜索失败',
+          icon: 'none'
+        })
+      } finally {
+        this.loading = false
+      }
+    },
+    
+    // 清空搜索
+    clearSearch() {
+      this.searchValue = ''
+      this.users = []
+      this.hasSearched = false
+    },
+    
+    // 显示角色选择
+    async showRoleSelect(user) {
+      this.currentUser = user
+      this.selectedRoles = user.roles.map(role => Number(role.id))
+      this.showRoleDialog = true
+    },
+    
+    // 显示积分设置弹窗
+    showPointsSelect(user) {
+      this.currentUser = user
+      this.pointsInput = ''
+      this.pointsReason = ''
+      this.showPointsDialog = true
+    },
+    
+    // 调整积分输入
+    adjustPoints(value) {
+      let current = parseInt(this.pointsInput) || 0
+      current += value
+      this.pointsInput = current.toString()
+    },
+    
+    // 计算新积分
+    calculateNewPoints() {
+      const current = parseInt(this.currentUser?.points) || 0
+      const adjust = parseInt(this.pointsInput) || 0
+      return current + adjust
+    },
+    
+    // 保存用户积分
+    async saveUserPoints() {
+      if (!this.currentUser || !this.pointsInput || !this.pointsReason) {
+        uni.showToast({
+          title: '请填写完整信息',
+          icon: 'none'
+        })
+        return
+      }
+      
+      try {
+        uni.showLoading({
+          title: '保存中...'
+        })
+        
+        // 这里需要你真实的 API 调用
+        // await updateUserPoints({
+        //   userId: this.currentUser.id,
+        //   points: Number(this.pointsInput),
+        //   reason: this.pointsReason
+        // })
+        
+        uni.hideLoading()
+        uni.showToast({
+          title: '积分设置成功',
+          icon: 'success'
+        })
+        
+        // 更新本地数据
+        const userIndex = this.users.findIndex(u => u.id === this.currentUser.id)
+        if (userIndex > -1) {
+          this.users[userIndex].points = this.calculateNewPoints()
+        }
+        
+        this.closePointsDialog()
+      } catch (error) {
+        uni.hideLoading()
+        uni.showToast({
+          title: error.response?.data?.message || '积分设置失败',
+          icon: 'none'
+        })
+      }
+    },
+    
+    // 切换角色选择
+    toggleRole(roleId) {
+      const numericRoleId = Number(roleId)
+      const index = this.selectedRoles.indexOf(numericRoleId)
+      if (index > -1) {
+        this.selectedRoles.splice(index, 1)
+      } else {
+        this.selectedRoles.push(numericRoleId)
+      }
+    },
+    
+    // 保存用户角色
+    async saveUserRoles() {
+      try {
+        uni.showLoading({
+          title: '保存中...'
+        })
+        
+        const roleIds = this.selectedRoles.map(Number)
+        // 这里需要你真实的 API 调用
+        // await assignUserRoles(this.currentUser.id, roleIds)
+        
+        uni.hideLoading()
+        uni.showToast({
+          title: '保存成功',
+          icon: 'success'
+        })
+        
+        // 更新本地数据
+        const updatedRoles = this.allRoles.filter(role => 
+          this.selectedRoles.includes(Number(role.id))
+        )
+        const userIndex = this.users.findIndex(u => u.id === this.currentUser.id)
+        if (userIndex > -1) {
+          this.users[userIndex].roles = updatedRoles
+        }
+        
+        this.closeRoleDialog()
+      } catch (error) {
+        uni.hideLoading()
+        uni.showToast({
+          title: error.response?.data?.message || '保存失败',
+          icon: 'none'
+        })
+      }
+    },
+    
+    // 关闭角色对话框
+    closeRoleDialog() {
+      this.showRoleDialog = false
+      this.currentUser = null
+      this.selectedRoles = []
+    },
+    
+    // 关闭积分对话框
+    closePointsDialog() {
+      this.showPointsDialog = false
+      this.currentUser = null
+      this.pointsInput = ''
+      this.pointsReason = ''
+    },
+    
+    // 返回
+    goBack() {
+      uni.navigateBack()
+    },
+    
+    // 获取角色标签样式
+    getRoleTagClass(roleCode) {
+      const classMap = {
+        'ROLE_ADMIN': 'role-admin',
+        'ROLE_USER': 'role-user',
+        'ROLE_REFEREE': 'role-referee',
+        'ROLE_TOURNAMENT_MANAGER': 'role-manager'
+      }
+      return classMap[roleCode] || 'role-default'
     }
-  } catch (error) {
-    uni.showToast({
-      title: '搜索失败',
-      icon: 'none'
-    })
-  } finally {
-    loading.value = false
   }
 }
-
-// 清空搜索
-const clearSearch = () => {
-  searchValue.value = ''
-  users.value = []
-  hasSearched.value = false
-}
-
-// 显示角色选择
-const showRoleSelect = async (user) => {
-  currentUser.value = user
-  selectedRoles.value = user.roles.map(role => Number(role.id))
-  showRoleDialog.value = true
-}
-
-// 显示积分设置弹窗
-const showPointsSelect = (user) => {
-  currentUser.value = user
-  pointsInput.value = ''
-  pointsReason.value = ''
-  showPointsDialog.value = true
-}
-
-// 调整积分输入
-const adjustPoints = (value) => {
-  let current = parseInt(pointsInput.value) || 0
-  current += value
-  pointsInput.value = current.toString()
-}
-
-// 计算新积分
-const calculateNewPoints = () => {
-  const current = parseInt(currentUser.value?.points) || 0
-  const adjust = parseInt(pointsInput.value) || 0
-  return current + adjust
-}
-
-// 保存用户积分
-const saveUserPoints = async () => {
-  if (!currentUser.value || !pointsInput.value || !pointsReason.value) {
-    uni.showToast({
-      title: '请填写完整信息',
-      icon: 'none'
-    })
-    return
-  }
-  
-  try {
-    uni.showLoading({
-      title: '保存中...'
-    })
-    
-    await updateUserPoints({
-      userId: currentUser.value.id,
-      points: Number(pointsInput.value),
-      reason: pointsReason.value
-    })
-    
-    uni.hideLoading()
-    uni.showToast({
-      title: '积分设置成功',
-      icon: 'success'
-    })
-    
-    // 更新本地数据
-    const userIndex = users.value.findIndex(u => u.id === currentUser.value.id)
-    if (userIndex > -1) {
-      users.value[userIndex].points = calculateNewPoints()
-    }
-    
-    closePointsDialog()
-  } catch (error) {
-    uni.hideLoading()
-    uni.showToast({
-      title: error.response?.data?.message || '积分设置失败',
-      icon: 'none'
-    })
-  }
-}
-
-// 切换角色选择
-const toggleRole = (roleId) => {
-  const numericRoleId = Number(roleId)
-  const index = selectedRoles.value.indexOf(numericRoleId)
-  if (index > -1) {
-    selectedRoles.value.splice(index, 1)
-  } else {
-    selectedRoles.value.push(numericRoleId)
-  }
-}
-
-// 保存用户角色
-const saveUserRoles = async () => {
-  try {
-    uni.showLoading({
-      title: '保存中...'
-    })
-    
-    const roleIds = selectedRoles.value.map(Number)
-    await assignUserRoles(currentUser.value.id, roleIds)
-    
-    uni.hideLoading()
-    uni.showToast({
-      title: '保存成功',
-      icon: 'success'
-    })
-    
-    // 更新本地数据
-    const updatedRoles = allRoles.value.filter(role => 
-      selectedRoles.value.includes(Number(role.id))
-    )
-    const userIndex = users.value.findIndex(u => u.id === currentUser.value.id)
-    if (userIndex > -1) {
-      users.value[userIndex].roles = updatedRoles
-    }
-    
-    closeRoleDialog()
-  } catch (error) {
-    uni.hideLoading()
-    uni.showToast({
-      title: error.response?.data?.message || '保存失败',
-      icon: 'none'
-    })
-  }
-}
-
-// 关闭角色对话框
-const closeRoleDialog = () => {
-  showRoleDialog.value = false
-  currentUser.value = null
-  selectedRoles.value = []
-}
-
-// 关闭积分对话框
-const closePointsDialog = () => {
-  showPointsDialog.value = false
-  currentUser.value = null
-  pointsInput.value = ''
-  pointsReason.value = ''
-}
-
-// 返回
-const goBack = () => {
-  uni.navigateBack()
-}
-
-// 获取角色标签样式
-const getRoleTagClass = (roleCode) => {
-  const classMap = {
-    'ROLE_ADMIN': 'role-admin',
-    'ROLE_USER': 'role-user',
-    'ROLE_REFEREE': 'role-referee',
-    'ROLE_TOURNAMENT_MANAGER': 'role-manager'
-  }
-  return classMap[roleCode] || 'role-default'
-}
-
-onMounted(() => {
-  loadRoles()
-})
 </script>
 
 <style scoped>

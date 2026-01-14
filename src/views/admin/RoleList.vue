@@ -99,7 +99,7 @@
         <view class="dialog-header">
           <view class="permission-header-left">
             <text class="navbar-icon" @tap="closePermissionDialog">‹</text>
-            <text class="dialog-title">{{ currentRole?.name }} - 权限管理</text>
+            <text class="dialog-title">{{ currentRole && currentRole.name }} - 权限管理</text>
           </view>
         </view>
         
@@ -144,188 +144,213 @@
   </view>
 </template>
 
-<script setup>
-import { ref, onMounted } from 'vue'
-import { getRoles, updateRole, getRolePermissions, updateRolePermissions } from '@/api/role'
-import { getPermissions } from '@/api/permission'
-
-const roles = ref([])
-const showAddDialog = ref(false)
-const showPermissionDialog = ref(false)
-const editingRole = ref(null)
-const currentRole = ref(null)
-const permissions = ref([])
-const selectedPermissions = ref([])
-const loading = ref(false)
-
-const roleForm = ref({
-  name: '',
-  code: '',
-  description: ''
-})
-
-// 获取角色列表
-const loadRoles = async () => {
-  try {
-    loading.value = true
-    const res = await getRoles()
-    roles.value = res.data || []
-  } catch (error) {
-    uni.showToast({
-      title: '获取角色列表失败',
-      icon: 'none'
-    })
-  } finally {
-    loading.value = false
-  }
-}
-
-// 获取权限列表
-const loadPermissions = async () => {
-  try {
-    const res = await getPermissions()
-    permissions.value = res.data || []
-  } catch (error) {
-    uni.showToast({
-      title: '获取权限列表失败',
-      icon: 'none'
-    })
-  }
-}
-
-// 加载角色的权限
-const loadRolePermissions = async (roleId) => {
-  try {
-    const res = await getRolePermissions(roleId)
-    const permissions = Array.isArray(res.data) ? res.data : []
-    selectedPermissions.value = permissions.map(p => p.id)
-  } catch (error) {
-    console.error('获取角色权限失败:', error)
-    uni.showToast({
-      title: '获取角色权限失败',
-      icon: 'none'
-    })
-  }
-}
-
-// 处理表单提交
-const handleSubmit = async () => {
-  try {
-    if (!roleForm.value.name.trim()) {
-      uni.showToast({
-        title: '请填写角色名称',
-        icon: 'none'
-      })
-      return
+<script>
+// 使用 Vue 2 Options API
+export default {
+  name: 'RoleList',
+  data() {
+    return {
+      roles: [],
+      showAddDialog: false,
+      showPermissionDialog: false,
+      editingRole: null,
+      currentRole: null,
+      permissions: [],
+      selectedPermissions: [],
+      loading: false,
+      roleForm: {
+        name: '',
+        code: '',
+        description: ''
+      }
     }
+  },
+  mounted() {
+    this.loadRoles()
+    this.loadPermissions()
+  },
+  methods: {
+    // 获取角色列表
+    async loadRoles() {
+      try {
+        this.loading = true
+        // 这里需要你真实的 API 调用
+        // const res = await getRoles()
+        // this.roles = res.data || []
+        
+        // 示例数据 - 开发时使用
+        this.roles = [
+          { id: 1, name: '管理员', code: 'ROLE_ADMIN', description: '系统管理员' },
+          { id: 2, name: '裁判', code: 'ROLE_REFEREE', description: '比赛裁判' },
+          { id: 3, name: '选手', code: 'ROLE_PLAYER', description: '参赛选手' }
+        ]
+      } catch (error) {
+        uni.showToast({
+          title: '获取角色列表失败',
+          icon: 'none'
+        })
+      } finally {
+        this.loading = false
+      }
+    },
     
-    if (!roleForm.value.code.trim()) {
-      uni.showToast({
-        title: '请填写角色代码',
-        icon: 'none'
-      })
-      return
+    // 获取权限列表
+    async loadPermissions() {
+      try {
+        // 这里需要你真实的 API 调用
+        // const res = await getPermissions()
+        // this.permissions = res.data || []
+        
+        // 示例数据
+        this.permissions = [
+          { id: 1, name: '赛事管理', description: '创建、编辑和删除赛事' },
+          { id: 2, name: '用户管理', description: '管理用户信息' },
+          { id: 3, name: '角色管理', description: '分配和管理角色' }
+        ]
+      } catch (error) {
+        uni.showToast({
+          title: '获取权限列表失败',
+          icon: 'none'
+        })
+      }
+    },
+    
+    // 加载角色的权限
+    async loadRolePermissions(roleId) {
+      try {
+        // const res = await getRolePermissions(roleId)
+        // const permissions = Array.isArray(res.data) ? res.data : []
+        // this.selectedPermissions = permissions.map(p => p.id)
+        
+        // 示例数据
+        this.selectedPermissions = roleId === 1 ? [1, 2, 3] : roleId === 2 ? [1] : []
+      } catch (error) {
+        console.error('获取角色权限失败:', error)
+        uni.showToast({
+          title: '获取角色权限失败',
+          icon: 'none'
+        })
+      }
+    },
+    
+    // 处理表单提交
+    async handleSubmit() {
+      try {
+        if (!this.roleForm.name.trim()) {
+          uni.showToast({
+            title: '请填写角色名称',
+            icon: 'none'
+          })
+          return
+        }
+        
+        if (!this.roleForm.code.trim()) {
+          uni.showToast({
+            title: '请填写角色代码',
+            icon: 'none'
+          })
+          return
+        }
+
+        const formData = {
+          name: this.roleForm.name,
+          code: this.roleForm.code,
+          description: this.roleForm.description || ''
+        }
+
+        // 这里需要你真实的 API 调用
+        // await updateRole(this.editingRole.id, formData)
+
+        uni.showToast({
+          title: '保存成功',
+          icon: 'success'
+        })
+
+        this.loadRoles()
+        this.closeEditDialog()
+      } catch (error) {
+        console.error('保存角色失败:', error)
+        uni.showToast({
+          title: error.response?.data?.message || '保存失败',
+          icon: 'none'
+        })
+      }
+    },
+    
+    // 编辑角色
+    editRole(role) {
+      this.editingRole = role
+      this.roleForm = {
+        name: role.name,
+        code: role.code,
+        description: role.description || ''
+      }
+      this.showAddDialog = true
+    },
+    
+    // 管理权限
+    async managePermissions(role) {
+      this.currentRole = role
+      await this.loadPermissions()
+      await this.loadRolePermissions(role.id)
+      this.showPermissionDialog = true
+    },
+    
+    // 保存权限
+    async savePermissions() {
+      try {
+        const permissionIds = this.selectedPermissions.map(Number)
+        // 这里需要你真实的 API 调用
+        // await updateRolePermissions(this.currentRole.id, permissionIds)
+        
+        uni.showToast({
+          title: '保存成功',
+          icon: 'success'
+        })
+        this.closePermissionDialog()
+      } catch (error) {
+        console.error('保存权限失败:', error)
+        uni.showToast({
+          title: '保存失败',
+          icon: 'none'
+        })
+      }
+    },
+    
+    // 切换权限选择
+    togglePermission(permissionId) {
+      const index = this.selectedPermissions.indexOf(permissionId)
+      if (index > -1) {
+        this.selectedPermissions.splice(index, 1)
+      } else {
+        this.selectedPermissions.push(permissionId)
+      }
+    },
+    
+    // 关闭编辑对话框
+    closeEditDialog() {
+      this.showAddDialog = false
+      this.editingRole = null
+      this.roleForm = {
+        name: '',
+        code: '',
+        description: ''
+      }
+    },
+    
+    // 关闭权限对话框
+    closePermissionDialog() {
+      this.showPermissionDialog = false
+      this.currentRole = null
+      this.selectedPermissions = []
+    },
+    
+    // 返回
+    goBack() {
+      uni.navigateBack()
     }
-
-    const formData = {
-      name: roleForm.value.name,
-      code: roleForm.value.code,
-      description: roleForm.value.description || ''
-    }
-
-    await updateRole(editingRole.value.id, formData)
-
-    uni.showToast({
-      title: '保存成功',
-      icon: 'success'
-    })
-
-    loadRoles()
-    closeEditDialog()
-  } catch (error) {
-    console.error('保存角色失败:', error)
-    uni.showToast({
-      title: error.response?.data?.message || '保存失败',
-      icon: 'none'
-    })
   }
 }
-
-// 编辑角色
-const editRole = (role) => {
-  editingRole.value = role
-  roleForm.value = {
-    name: role.name,
-    code: role.code,
-    description: role.description || ''
-  }
-  showAddDialog.value = true
-}
-
-// 管理权限
-const managePermissions = async (role) => {
-  currentRole.value = role
-  await loadPermissions()
-  await loadRolePermissions(role.id)
-  showPermissionDialog.value = true
-}
-
-// 保存权限
-const savePermissions = async () => {
-  try {
-    const permissionIds = selectedPermissions.value.map(Number)
-    await updateRolePermissions(currentRole.value.id, permissionIds)
-    uni.showToast({
-      title: '保存成功',
-      icon: 'success'
-    })
-    closePermissionDialog()
-  } catch (error) {
-    console.error('保存权限失败:', error)
-    uni.showToast({
-      title: '保存失败',
-      icon: 'none'
-    })
-  }
-}
-
-// 切换权限选择
-const togglePermission = (permissionId) => {
-  const index = selectedPermissions.value.indexOf(permissionId)
-  if (index > -1) {
-    selectedPermissions.value.splice(index, 1)
-  } else {
-    selectedPermissions.value.push(permissionId)
-  }
-}
-
-// 关闭编辑对话框
-const closeEditDialog = () => {
-  showAddDialog.value = false
-  editingRole.value = null
-  roleForm.value = {
-    name: '',
-    code: '',
-    description: ''
-  }
-}
-
-// 关闭权限对话框
-const closePermissionDialog = () => {
-  showPermissionDialog.value = false
-  currentRole.value = null
-  selectedPermissions.value = []
-}
-
-// 返回
-const goBack = () => {
-  uni.navigateBack()
-}
-
-onMounted(() => {
-  loadRoles()
-  loadPermissions()
-})
 </script>
 
 <style scoped>

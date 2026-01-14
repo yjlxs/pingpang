@@ -8,12 +8,12 @@
         </view>
         <view class="score-section" @click="showScoreDialog(match)">
           <view :class="['score-tag', getScoreTagClass(match.player1Score, match.player2Score)]">
-         <text>{{ match.player1Score || 0 }}</text>
-            </view>
+            <text>{{ match.player1Score || 0 }}</text>
+          </view>
           <text class="score-separator">:</text>
           <view :class="['score-tag', getScoreTagClass(match.player2Score, match.player1Score)]">
-             <text>{{ match.player2Score || 0 }}</text>
-            </view>
+            <text>{{ match.player2Score || 0 }}</text>
+          </view>
         </view>
         <view class="player player-right">
           <text class="player-name">{{ match.player2Name }}</text>
@@ -21,11 +21,9 @@
         </view>
       </view>
       <view class="match-footer">
-        <view 
-  :class="['status-tag', getStatusTagClass(match.status)]"
->
-  <text>{{ getStatusText(match.status) }}</text>
-</view>
+        <view :class="['status-tag', getStatusTagClass(match.status)]">
+          <text>{{ getStatusText(match.status) }}</text>
+        </view>
         <button 
           v-if="match.status !== 'FINISHED'"
           type="primary" 
@@ -43,11 +41,12 @@
       <view class="score-panel-content">
         <view class="score-panel-header">
           <text>设置比分</text>
-          <van-icon name="cross" @click="dialogVisible = false" />
+          <text class="close-btn" @click="dialogVisible = false">×</text>
         </view>
         <view class="score-panel-body">
+          <!-- 修复可选链操作符 -->
           <view class="score-row">
-            <text class="player-name">{{ currentMatch?.player1Name }}</text>
+            <text class="player-name">{{ currentMatch && currentMatch.player1Name }}</text>
             <input
               v-model="player1Score"
               type="tel"
@@ -56,7 +55,7 @@
             />
           </view>
           <view class="score-row">
-            <text class="player-name">{{ currentMatch?.player2Name }}</text>
+            <text class="player-name">{{ currentMatch && currentMatch.player2Name }}</text>
             <input
               v-model="player2Score"
               type="tel"
@@ -74,85 +73,106 @@
   </view>
 </template>
 
-<script setup>
-import { ref } from 'vue'
-import { showToast, Dialog, Button, Tag } from 'vant'
+<script>
+// UniApp 使用 Vue 2 的 Options API
+export default {
+  name: 'MatchList',
+  props: {
+    matches: {
+      type: Array,
+      default: () => []
+    }
+  },
+  data() {
+    return {
+      dialogVisible: false,
+      currentMatch: null,
+      player1Score: '',
+      player2Score: ''
+    }
+  },
+  methods: {
+    getScoreTagClass(score1, score2) {
+      if (!score1 || !score2) return 'score-default'
+      return parseInt(score1) > parseInt(score2) ? 'score-win' : 'score-lose'
+    },
+    
+    getStatusTagClass(status) {
+      switch (status) {
+        case 'FINISHED':
+          return 'status-finished'
+        case 'ONGOING':
+          return 'status-ongoing'
+        default:
+          return 'status-default'
+      }
+    },
+    
+    getStatusText(status) {
+      switch (status) {
+        case 'PENDING':
+          return '未开始'
+        case 'ONGOING':
+          return '进行中'
+        case 'FINISHED':
+          return '已结束'
+        default:
+          return '未知'
+      }
+    },
+    
+    showScoreDialog(match) {
+      this.currentMatch = match
+      this.player1Score = match.player1Score || ''
+      this.player2Score = match.player2Score || ''
+      this.dialogVisible = true
+    },
+    
+    handleScoreConfirm() {
+      const score1 = parseInt(this.player1Score)
+      const score2 = parseInt(this.player2Score)
 
-const props = defineProps({
-  matches: {
-    type: Array,
-    default: () => []
+      if (isNaN(score1) || isNaN(score2)) {
+        // 使用 UniApp 的提示
+        uni.showToast({
+          title: '请输入有效的比分',
+          icon: 'none'
+        })
+        return
+      }
+
+      if (score1 < 0 || score2 < 0) {
+        uni.showToast({
+          title: '比分不能为负数',
+          icon: 'none'
+        })
+        return
+      }
+
+      if (score1 === score2) {
+        uni.showToast({
+          title: '比分不能相等',
+          icon: 'none'
+        })
+        return
+      }
+
+      this.$emit('score-update', this.currentMatch.id, score1, score2)
+      this.dialogVisible = false
+    }
   }
-})
-
-const emit = defineEmits(['score-update'])
-
-const dialogVisible = ref(false)
-const currentMatch = ref(null)
-const player1Score = ref('')
-const player2Score = ref('')
-
-const getScoreTagType = (score1, score2) => {
-  if (!score1 || !score2) return 'primary'
-  return parseInt(score1) > parseInt(score2) ? 'success' : 'warning'
-}
-
-const getStatusTagType = (status) => {
-  switch (status) {
-    case 'FINISHED':
-      return 'success'
-    case 'ONGOING':
-      return 'primary'
-    default:
-      return 'default'
-  }
-}
-
-const getStatusText = (status) => {
-  switch (status) {
-    case 'PENDING':
-      return '未开始'
-    case 'ONGOING':
-      return '进行中'
-    case 'FINISHED':
-      return '已结束'
-    default:
-      return '未知'
-  }
-}
-
-const showScoreDialog = (match) => {
-  currentMatch.value = match
-  player1Score.value = match.player1Score || ''
-  player2Score.value = match.player2Score || ''
-  dialogVisible.value = true
-}
-
-const handleScoreConfirm = () => {
-  const score1 = parseInt(player1Score.value)
-  const score2 = parseInt(player2Score.value)
-
-  if (isNaN(score1) || isNaN(score2)) {
-    showToast('请输入有效的比分')
-    return
-  }
-
-  if (score1 < 0 || score2 < 0) {
-    showToast('比分不能为负数')
-    return
-  }
-
-  if (score1 === score2) {
-    showToast('比分不能相等')
-    return
-  }
-
-  emit('score-update', currentMatch.value.id, score1, score2)
-  dialogVisible.value = false
 }
 </script>
 
 <style scoped>
+.close-btn {
+  font-size: 32rpx;
+  color: #999;
+  padding: 10rpx 20rpx;
+  line-height: 1;
+  cursor: pointer;
+}
+
 .match-list {
   display: flex;
   flex-direction: column;
@@ -202,12 +222,31 @@ const handleScoreConfirm = () => {
   align-items: center;
   gap: 8px;
   padding: 0 16px;
-  cursor: pointer;
 }
 
 .score-tag {
   min-width: 32px;
-  text-align: center;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.score-win {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.score-lose {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.score-default {
+  background-color: #f5f5f5;
+  color: #757575;
 }
 
 .score-separator {
@@ -221,6 +260,27 @@ const handleScoreConfirm = () => {
   align-items: center;
   justify-content: space-between;
   margin-top: 8px;
+}
+
+.status-tag {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.status-finished {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.status-ongoing {
+  background-color: #e3f2fd;
+  color: #1565c0;
+}
+
+.status-default {
+  background-color: #f5f5f5;
+  color: #757575;
 }
 
 .score-panel {
@@ -254,7 +314,6 @@ const handleScoreConfirm = () => {
   background: white;
   border-radius: 16px 16px 0 0;
   overflow: hidden;
-  max-height: 90vh;
   z-index: 9999;
 }
 
@@ -308,10 +367,4 @@ const handleScoreConfirm = () => {
   padding: 16px;
   border-top: 1px solid #ebedf0;
 }
-
-:deep(.button) {
-  height: 44px;
-  font-size: 16px;
-  border-radius: 8px;
-}
-</style> 
+</style>

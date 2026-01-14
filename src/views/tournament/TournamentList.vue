@@ -1,7 +1,9 @@
 <template>
   <view class="tournament-list">
-    <!-- 导航栏 -->
-    <uni-nav-bar title="赛事" fixed />
+    <!-- 自定义导航栏 -->
+    <view class="custom-navbar">
+      <text class="navbar-title">赛事</text>
+    </view>
     
     <!-- 搜索和筛选区 -->
     <view class="search-box">
@@ -23,7 +25,7 @@
         <view 
           class="filter-item" 
           :class="{ active: statusFilter !== 'all' }"
-          @tap="showStatusFilter = !showStatusFilter"
+          @tap="showStatusFilterPopup"
         >
           <text>{{ getStatusFilterText() }}</text>
           <text class="filter-arrow">▼</text>
@@ -32,7 +34,7 @@
         <view 
           class="filter-item" 
           :class="{ active: typeFilter !== 'all' }"
-          @tap="showTypeFilter = !showTypeFilter"
+          @tap="showTypeFilterPopup"
         >
           <text>{{ getTypeFilterText() }}</text>
           <text class="filter-arrow">▼</text>
@@ -110,11 +112,11 @@
     </view>
 
     <!-- 状态筛选弹窗 -->
-    <uni-popup ref="statusFilterPopup" type="bottom" :mask-click="true">
-      <view class="filter-popup">
+    <view class="filter-popup-overlay" v-if="showStatusFilter" @tap="closeStatusFilterPopup">
+      <view class="filter-popup" @tap.stop>
         <view class="filter-header">
           <text class="filter-title">选择状态</text>
-          <view class="close-btn" @tap="statusFilterPopup.close()">
+          <view class="close-btn" @tap="closeStatusFilterPopup">
             <text>×</text>
           </view>
         </view>
@@ -131,14 +133,14 @@
           </view>
         </view>
       </view>
-    </uni-popup>
+    </view>
 
     <!-- 类型筛选弹窗 -->
-    <uni-popup ref="typeFilterPopup" type="bottom" :mask-click="true">
-      <view class="filter-popup">
+    <view class="filter-popup-overlay" v-if="showTypeFilter" @tap="closeTypeFilterPopup">
+      <view class="filter-popup" @tap.stop>
         <view class="filter-header">
           <text class="filter-title">选择类型</text>
-          <view class="close-btn" @tap="typeFilterPopup.close()">
+          <view class="close-btn" @tap="closeTypeFilterPopup">
             <text>×</text>
           </view>
         </view>
@@ -155,50 +157,52 @@
           </view>
         </view>
       </view>
-    </uni-popup>
+    </view>
   </view>
 </template>
 
 <script>
-import { ref, onMounted, watch } from 'vue'
-import { getTournaments } from '@/api/tournament'
-import { hasPermission } from '@/utils/permission'
-import { getDateRange } from '@/utils/date'
-import uniPopup from '@dcloudio/uni-popup'
-
+// 使用 Vue 2 Options API
 export default {
-  setup() {
-    const tournaments = ref([])
-    const loading = ref(false)
-    const finished = ref(false)
-    const refreshing = ref(false)
-    const searchValue = ref('')
-    const statusFilter = ref('all')
-    const typeFilter = ref('all')
-    const page = ref(1)
-    const pageSize = 10
-    const statusFilterPopup = ref(null)
-    const typeFilterPopup = ref(null)
-
-    // 状态选项
-    const statusOptions = [
-      { text: '全部状态', value: 'all' },
-      { text: '草稿', value: 'DRAFT' },
-      { text: '报名中', value: 'REGISTERING' },
-      { text: '进行中', value: 'ONGOING' },
-      { text: '已结束', value: 'FINISHED' }
-    ]
-
-    // 比赛类型选项
-    const typeOptions = [
-      { text: '全部类型', value: 'all' },
-      { text: '单打', value: 'SINGLES' },
-      { text: '双打', value: 'DOUBLES' },
-      { text: '团体', value: 'TEAM' }
-    ]
-
+  name: 'TournamentList',
+  data() {
+    return {
+      tournaments: [],
+      loading: false,
+      finished: false,
+      refreshing: false,
+      searchValue: '',
+      statusFilter: 'all',
+      typeFilter: 'all',
+      showStatusFilter: false,
+      showTypeFilter: false,
+      page: 1,
+      pageSize: 10,
+      
+      // 状态选项
+      statusOptions: [
+        { text: '全部状态', value: 'all' },
+        { text: '草稿', value: 'DRAFT' },
+        { text: '报名中', value: 'REGISTERING' },
+        { text: '进行中', value: 'ONGOING' },
+        { text: '已结束', value: 'FINISHED' }
+      ],
+      
+      // 比赛类型选项
+      typeOptions: [
+        { text: '全部类型', value: 'all' },
+        { text: '单打', value: 'SINGLES' },
+        { text: '双打', value: 'DOUBLES' },
+        { text: '团体', value: 'TEAM' }
+      ]
+    }
+  },
+  mounted() {
+    this.loadTournaments()
+  },
+  methods: {
     // 获取状态样式类
-    const getStatusClass = (status) => {
+    getStatusClass(status) {
       const classMap = {
         'DRAFT': 'status-draft',
         'REGISTERING': 'status-registering',
@@ -206,10 +210,10 @@ export default {
         'FINISHED': 'status-finished'
       }
       return classMap[status] || 'status-default'
-    }
-
+    },
+    
     // 获取状态文本
-    const getStatusText = (status) => {
+    getStatusText(status) {
       const textMap = {
         'DRAFT': '草稿',
         'REGISTERING': '报名中',
@@ -217,58 +221,100 @@ export default {
         'FINISHED': '已结束'
       }
       return textMap[status] || status
-    }
-
+    },
+    
     // 获取类型文本
-    const getTypeText = (type) => {
+    getTypeText(type) {
       const textMap = {
         'SINGLES': '单打',
         'DOUBLES': '双打',
         'TEAM': '团体'
       }
       return textMap[type] || type
-    }
-
+    },
+    
     // 获取状态筛选文本
-    const getStatusFilterText = () => {
-      const option = statusOptions.find(opt => opt.value === statusFilter.value)
+    getStatusFilterText() {
+      const option = this.statusOptions.find(opt => opt.value === this.statusFilter)
       return option ? option.text : '状态'
-    }
-
+    },
+    
     // 获取类型筛选文本
-    const getTypeFilterText = () => {
-      const option = typeOptions.find(opt => opt.value === typeFilter.value)
+    getTypeFilterText() {
+      const option = this.typeOptions.find(opt => opt.value === this.typeFilter)
       return option ? option.text : '类型'
-    }
-
+    },
+    
+    // 格式化日期范围
+    getDateRange(startTime, endTime) {
+      if (!startTime || !endTime) return '时间待定'
+      // 这里可以添加日期格式化逻辑
+      return `${startTime} - ${endTime}`
+    },
+    
+    // 权限检查
+    hasPermission(permission) {
+      // 这里需要你真实的权限检查逻辑
+      // 暂时返回 true 用于测试
+      return true
+    },
+    
     // 加载赛事列表
-    const loadTournaments = async () => {
-      if (loading.value) return
+    async loadTournaments() {
+      if (this.loading) return
       
       try {
-        loading.value = true
+        this.loading = true
         const params = {
-          page: page.value,
-          pageSize,
-          keyword: searchValue.value,
-          status: statusFilter.value !== 'all' ? statusFilter.value : undefined,
-          type: typeFilter.value !== 'all' ? typeFilter.value : undefined
+          page: this.page,
+          pageSize: this.pageSize,
+          keyword: this.searchValue,
+          status: this.statusFilter !== 'all' ? this.statusFilter : undefined,
+          type: this.typeFilter !== 'all' ? this.typeFilter : undefined
         }
         
-        const res = await getTournaments(params)
-        const { list, total } = res.data
+        // 这里需要你真实的 API 调用
+        // const res = await getTournaments(params)
+        // const { list, total } = res.data
         
-        if (refreshing.value) {
-          tournaments.value = []
-          refreshing.value = false
+        // 示例数据
+        const list = [
+          {
+            id: 1,
+            title: '春季乒乓球锦标赛',
+            status: 'REGISTERING',
+            startTime: '2024-03-01',
+            endTime: '2024-03-03',
+            location: '市体育馆',
+            currentPlayers: 45,
+            maxPlayers: 64,
+            type: 'SINGLES'
+          },
+          {
+            id: 2,
+            title: '社区友谊赛',
+            status: 'ONGOING',
+            startTime: '2024-02-25',
+            endTime: '2024-02-26',
+            location: '社区活动中心',
+            currentPlayers: 32,
+            maxPlayers: 32,
+            type: 'DOUBLES'
+          }
+        ]
+        const total = 2
+        
+        if (this.refreshing) {
+          this.tournaments = []
+          this.refreshing = false
         }
         
-        tournaments.value.push(...list)
+        this.tournaments.push(...list)
         
-        if (tournaments.value.length >= total) {
-          finished.value = true
+        if (this.tournaments.length >= total) {
+          this.finished = true
         } else {
-          page.value++
+          this.page++
         }
       } catch (error) {
         uni.showToast({
@@ -276,97 +322,85 @@ export default {
           icon: 'none'
         })
       } finally {
-        loading.value = false
+        this.loading = false
       }
-    }
-
+    },
+    
     // 下拉刷新
-    const onRefresh = () => {
-      finished.value = false
-      page.value = 1
-      refreshing.value = true
-      loadTournaments()
-    }
-
+    onRefresh() {
+      this.finished = false
+      this.page = 1
+      this.refreshing = true
+      this.loadTournaments()
+    },
+    
     // 上拉加载
-    const onLoad = () => {
-      if (!loading.value && !finished.value) {
-        loadTournaments()
+    onLoad() {
+      if (!this.loading && !this.finished) {
+        this.loadTournaments()
       }
-    }
-
+    },
+    
     // 搜索
-    const onSearch = () => {
-      tournaments.value = []
-      finished.value = false
-      page.value = 1
-      loadTournaments()
-    }
-
+    onSearch() {
+      this.tournaments = []
+      this.finished = false
+      this.page = 1
+      this.loadTournaments()
+    },
+    
+    // 显示状态筛选弹窗
+    showStatusFilterPopup() {
+      this.showStatusFilter = true
+    },
+    
+    // 显示类型筛选弹窗
+    showTypeFilterPopup() {
+      this.showTypeFilter = true
+    },
+    
+    // 关闭状态筛选弹窗
+    closeStatusFilterPopup() {
+      this.showStatusFilter = false
+    },
+    
+    // 关闭类型筛选弹窗
+    closeTypeFilterPopup() {
+      this.showTypeFilter = false
+    },
+    
     // 选择状态
-    const selectStatus = (value) => {
-      statusFilter.value = value
-      statusFilterPopup.value.close()
-      tournaments.value = []
-      finished.value = false
-      page.value = 1
-      loadTournaments()
-    }
-
+    selectStatus(value) {
+      this.statusFilter = value
+      this.closeStatusFilterPopup()
+      this.tournaments = []
+      this.finished = false
+      this.page = 1
+      this.loadTournaments()
+    },
+    
     // 选择类型
-    const selectType = (value) => {
-      typeFilter.value = value
-      typeFilterPopup.value.close()
-      tournaments.value = []
-      finished.value = false
-      page.value = 1
-      loadTournaments()
-    }
-
+    selectType(value) {
+      this.typeFilter = value
+      this.closeTypeFilterPopup()
+      this.tournaments = []
+      this.finished = false
+      this.page = 1
+      this.loadTournaments()
+    },
+    
     // 查看赛事详情
-    const viewDetail = (id) => {
+    viewDetail(id) {
       uni.navigateTo({
         url: `/pages/tournament/detail?id=${id}`
       })
-    }
-
+    },
+    
     // 创建赛事
-    const createTournament = () => {
+    createTournament() {
       uni.navigateTo({
         url: '/pages/tournament/create'
       })
-    }
-
-    onMounted(() => {
-      loadTournaments()
-    })
-
-    return {
-      tournaments,
-      loading,
-      finished,
-      refreshing,
-      searchValue,
-      statusFilter,
-      typeFilter,
-      statusOptions,
-      typeOptions,
-      statusFilterPopup,
-      typeFilterPopup,
-      getStatusClass,
-      getStatusText,
-      getTypeText,
-      getStatusFilterText,
-      getTypeFilterText,
-      getDateRange,
-      hasPermission,
-      onSearch,
-      onRefresh,
-      onLoad,
-      selectStatus,
-      selectType,
-      viewDetail,
-      createTournament
     }
   }
 }
@@ -378,6 +412,26 @@ export default {
   background-color: #f7f8fa;
   display: flex;
   flex-direction: column;
+}
+
+/* 自定义导航栏 */
+.custom-navbar {
+  height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 32rpx;
+  background-color: #ffffff;
+  border-bottom: 2rpx solid #f5f5f5;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.navbar-title {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #333;
 }
 
 /* 搜索框样式 */
@@ -589,9 +643,22 @@ export default {
 }
 
 /* 筛选弹窗 */
+.filter-popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+}
+
 .filter-popup {
   background: #fff;
   border-radius: 40rpx 40rpx 0 0;
+  width: 100%;
   max-height: 70vh;
 }
 
@@ -609,6 +676,19 @@ export default {
   color: #333;
 }
 
+.close-btn {
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 50%;
+  background: #f5f5f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40rpx;
+  color: #999;
+  cursor: pointer;
+}
+
 .filter-options {
   max-height: 50vh;
   overflow-y: auto;
@@ -621,6 +701,7 @@ export default {
   padding: 30rpx 40rpx;
   border-bottom: 1rpx solid #f5f5f5;
   font-size: 32rpx;
+  cursor: pointer;
 }
 
 .filter-option.selected {
